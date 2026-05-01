@@ -40,7 +40,7 @@ const WindowChrome = ({ onTweaks }) => (
           color: '#9097A0', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = b === 'close' ? '#E81123' : 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#fff'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = b === 'close' ? '#E81123' : 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#E6E8EC'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9097A0'; }}>
           <Icon name={b} size={11} strokeWidth={1.5} />
         </button>

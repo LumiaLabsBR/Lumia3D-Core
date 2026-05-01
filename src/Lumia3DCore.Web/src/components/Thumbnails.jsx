@@ -89,8 +89,8 @@ const shapes = {
       <path d="M-40 -25 L0 -50 L40 -25 L0 0 Z" fill={`url(#light-${id})`} />
       <path d="M-40 -25 L0 0 L0 50 L-40 25 Z" fill={`url(#side-${id})`} />
       <path d="M40 -25 L0 0 L0 50 L40 25 Z" fill={`url(#dark-${id})`} />
-      <text x="-20" y="20" fontFamily="monospace" fontSize="10" fill="#fff" opacity="0.3">X</text>
-      <text x="13" y="20" fontFamily="monospace" fontSize="10" fill="#fff" opacity="0.3">Y</text>
+      <text x="-20" y="20" fontFamily="monospace" fontSize="10" fill="#E6E8EC" opacity="0.3">X</text>
+      <text x="13" y="20" fontFamily="monospace" fontSize="10" fill="#E6E8EC" opacity="0.3">Y</text>
       <text x="-3" y="-25" fontFamily="monospace" fontSize="10" fill="#3f4550" opacity="0.5">Z</text>
     </g>
   </>),
@@ -132,7 +132,7 @@ const shapes = {
     <g transform="translate(100 110)">
       <rect x="-65" y="-5" width="100" height="14" rx="4" fill={`url(#metal-${id})`} />
       <rect x="35" y="-12" width="20" height="28" rx="4" fill={`url(#side-${id})`} />
-      <rect x="-65" y="-3" width="100" height="3" fill="#fff" opacity="0.4" />
+      <rect x="-65" y="-3" width="100" height="3" fill="#E6E8EC" opacity="0.4" />
     </g>
   </>),
   torus: (id) => (<>
