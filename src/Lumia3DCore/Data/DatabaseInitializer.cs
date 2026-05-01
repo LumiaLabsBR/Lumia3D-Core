@@ -1,114 +1,72 @@
-using Dapper;
+using System;
+using System.IO;
 using Microsoft.Data.Sqlite;
 
 namespace Lumia3DCore.Data;
 
 /// <summary>
-/// Cria e inicializa o schema SQLite incluindo tabelas, índice FTS5 e triggers.
+/// Ponto de entrada para inicialização do banco SQLite.
+/// Realiza backup antes de migrations e delega ao <see cref="MigrationRunner"/>.
 /// </summary>
-/// <remarks>
-/// Schema é criado idempotentemente via <c>CREATE TABLE IF NOT EXISTS</c>.
-/// A infraestrutura de migrations propriamente dita é introduzida na Fase 2 do plano
-/// (vide <c>PLAN.md</c>) — esta classe é o ponto de integração.
-/// </remarks>
 public class DatabaseInitializer
 {
+    private readonly string _dbPath;
     private readonly string _connectionString;
 
     public DatabaseInitializer(string dbPath)
     {
+        _dbPath = dbPath;
         _connectionString = $"Data Source={dbPath};";
     }
 
+    /// <summary>
+    /// Inicializa (ou migra) o banco. Seguro para chamar a cada startup.
+    /// </summary>
     public void Initialize()
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
+        bool isExisting = File.Exists(_dbPath);
+        if (isExisting)
+            BackupIfNeeded();
 
-        // Foreign keys precisam ser explicitamente habilitadas no SQLite
-        connection.Execute("PRAGMA foreign_keys = ON;");
+        var runner = new MigrationRunner(_connectionString);
+        runner.Run();
+    }
 
-        var createCategoryTable = @"
-            CREATE TABLE IF NOT EXISTS Category (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Name TEXT NOT NULL,
-                ParentCategoryId INTEGER,
-                SortOrder INTEGER DEFAULT 0,
-                FOREIGN KEY(ParentCategoryId) REFERENCES Category(Id)
-            );";
+    /// <summary>
+    /// Cria um backup timestampado antes de aplicar migrations.
+    /// Mantém apenas os 3 backups mais recentes.
+    /// </summary>
+    private void BackupIfNeeded()
+    {
+        try
+        {
+            string dir = Path.GetDirectoryName(_dbPath) ?? ".";
+            string baseName = Path.GetFileNameWithoutExtension(_dbPath);
 
-        var createObject3DTable = @"
-            CREATE TABLE IF NOT EXISTS Object3D (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Name TEXT NOT NULL,
-                Description TEXT,
-                MainFilePath TEXT NOT NULL,
-                FileType TEXT NOT NULL,
-                ThumbnailPath TEXT,
-                Hash TEXT NOT NULL,
-                CategoryId INTEGER,
-                CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(CategoryId) REFERENCES Category(Id)
-            );";
+            // Verifica se há alguma migration pendente antes de fazer backup desnecessário.
+            // (Simples heurística: copia sempre que o banco já existe e o runner vai rodar.)
+            string timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            string backupPath = Path.Combine(dir, $"{baseName}.backup-{timestamp}.db");
+            File.Copy(_dbPath, backupPath, overwrite: false);
 
-        // FTS5 indexa Nome, Descrição e Filename original (Phase 6 do plano).
-        var createObjectFtsTable = @"
-            CREATE VIRTUAL TABLE IF NOT EXISTS Object3D_FTS USING fts5(
-                Name,
-                Description,
-                Filename,
-                content='Object3D',
-                content_rowid='Id'
-            );";
+            PruneOldBackups(dir, baseName);
+        }
+        catch
+        {
+            // Backup falha → não bloqueia a inicialização; bank original intacto.
+        }
+    }
 
-        var createTriggers = @"
-            CREATE TRIGGER IF NOT EXISTS Object3D_ai AFTER INSERT ON Object3D BEGIN
-                INSERT INTO Object3D_FTS(rowid, Name, Description, Filename)
-                VALUES (new.Id, new.Name, new.Description, new.MainFilePath);
-            END;
-            CREATE TRIGGER IF NOT EXISTS Object3D_ad AFTER DELETE ON Object3D BEGIN
-                INSERT INTO Object3D_FTS(Object3D_FTS, rowid, Name, Description, Filename)
-                VALUES('delete', old.Id, old.Name, old.Description, old.MainFilePath);
-            END;
-            CREATE TRIGGER IF NOT EXISTS Object3D_au AFTER UPDATE ON Object3D BEGIN
-                INSERT INTO Object3D_FTS(Object3D_FTS, rowid, Name, Description, Filename)
-                VALUES('delete', old.Id, old.Name, old.Description, old.MainFilePath);
-                INSERT INTO Object3D_FTS(rowid, Name, Description, Filename)
-                VALUES (new.Id, new.Name, new.Description, new.MainFilePath);
-            END;
-        ";
-
-        var createTagTable = @"
-            CREATE TABLE IF NOT EXISTS Tag (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Name TEXT NOT NULL UNIQUE,
-                Color TEXT
-            );";
-
-        var createObjectTagTable = @"
-            CREATE TABLE IF NOT EXISTS ObjectTag (
-                ObjectId INTEGER NOT NULL,
-                TagId INTEGER NOT NULL,
-                PRIMARY KEY (ObjectId, TagId),
-                FOREIGN KEY(ObjectId) REFERENCES Object3D(Id) ON DELETE CASCADE,
-                FOREIGN KEY(TagId) REFERENCES Tag(Id) ON DELETE CASCADE
-            );";
-
-        var createAttachmentTable = @"
-            CREATE TABLE IF NOT EXISTS Attachment (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ObjectId INTEGER NOT NULL,
-                FilePath TEXT NOT NULL,
-                Type TEXT NOT NULL,
-                FOREIGN KEY(ObjectId) REFERENCES Object3D(Id) ON DELETE CASCADE
-            );";
-
-        connection.Execute(createCategoryTable);
-        connection.Execute(createObject3DTable);
-        connection.Execute(createObjectFtsTable);
-        connection.Execute(createTriggers);
-        connection.Execute(createTagTable);
-        connection.Execute(createObjectTagTable);
-        connection.Execute(createAttachmentTable);
+    private static void PruneOldBackups(string dir, string baseName)
+    {
+        try
+        {
+            var backups = Directory.GetFiles(dir, $"{baseName}.backup-*.db");
+            Array.Sort(backups); // ordem lexicográfica = cronológica com timestamp yyyyMMdd-HHmmss
+            int excess = backups.Length - 3;
+            for (int i = 0; i < excess; i++)
+                File.Delete(backups[i]);
+        }
+        catch { }
     }
 }

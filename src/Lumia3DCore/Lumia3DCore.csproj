@@ -53,4 +53,9 @@
     <Content Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Migrations SQL embutidas no assembly -->
+  <ItemGroup>
+    <EmbeddedResource Include="Data\Migrations\*.sql" />
+  </ItemGroup>
+
 </Project>
