@@ -19,15 +19,17 @@ public class LibraryManager
     private readonly string _libraryPath;
     private readonly ObjectRepository _repository;
     private readonly string _thumbnailsPath;
+    private readonly ThumbnailQueue _thumbnailQueue;
 
     public static readonly HashSet<string> Object3DExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".stl", ".3mf", ".obj", ".step", ".stp" };
 
-    public LibraryManager(string libraryPath, ObjectRepository repository)
+    public LibraryManager(string libraryPath, ObjectRepository repository, ThumbnailQueue thumbnailQueue)
     {
         _libraryPath = libraryPath;
         _repository = repository;
         _thumbnailsPath = Path.Combine(libraryPath, "Thumbnails");
+        _thumbnailQueue = thumbnailQueue;
 
         Directory.CreateDirectory(_libraryPath);
         Directory.CreateDirectory(_thumbnailsPath);
@@ -51,7 +53,6 @@ public class LibraryManager
 
         string destinationFileName = $"{hash}{fileInfo.Extension}";
         string destinationFilePath = Path.Combine(_libraryPath, destinationFileName);
-        string thumbnailPath = string.Empty;
         bool newFileCopied = false;
 
         try
@@ -62,29 +63,26 @@ public class LibraryManager
                 newFileCopied = true;
             }
 
-            thumbnailPath = ThumbnailGenerator.GenerateThumbnail(destinationFilePath, _thumbnailsPath);
-
             var newObject = new Object3D
             {
                 Name = SanitizeName(Path.GetFileNameWithoutExtension(fileInfo.Name)),
                 MainFilePath = destinationFilePath,
                 FileType = fileInfo.Extension.ToLower(),
-                ThumbnailPath = thumbnailPath,
+                ThumbnailPath = string.Empty,
                 Hash = hash,
                 CategoryId = categoryId,
                 CreatedAt = DateTime.UtcNow
             };
 
             _repository.AddObject(newObject);
+            _thumbnailQueue.Enqueue(new ThumbnailJob(newObject.Id, destinationFilePath));
             AppLogger.Debug($"Importado: '{newObject.Name}' ({newObject.FileType})");
             return newObject;
         }
         catch (Exception ex)
         {
             AppLogger.Error($"Falha ao importar '{fileInfo.Name}'", ex);
-            // Rollback: remove arquivos criados neste import para não deixar órfãos
             if (newFileCopied) try { File.Delete(destinationFilePath); } catch { }
-            if (!string.IsNullOrEmpty(thumbnailPath)) try { File.Delete(thumbnailPath); } catch { }
             return null;
         }
     }
@@ -231,12 +229,11 @@ public class LibraryManager
         try { if (File.Exists(obj.MainFilePath)) File.Delete(obj.MainFilePath); } catch { }
     }
 
-    public string RegenerateThumbnail(Object3D obj)
+    public void RegenerateThumbnail(Object3D obj)
     {
         try { if (File.Exists(obj.ThumbnailPath)) File.Delete(obj.ThumbnailPath); } catch { }
-        string newPath = ThumbnailGenerator.GenerateThumbnail(obj.MainFilePath, _thumbnailsPath);
-        _repository.UpdateObjectThumbnail(obj.Id, newPath);
-        return newPath;
+        _repository.UpdateObjectThumbnail(obj.Id, string.Empty);
+        _thumbnailQueue.Enqueue(new ThumbnailJob(obj.Id, obj.MainFilePath));
     }
 
     private string CalculateHash(string filePath)

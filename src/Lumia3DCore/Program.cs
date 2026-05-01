@@ -43,9 +43,10 @@ internal static class Program
         dbInit.Initialize();
 
         // ── Inicializar serviços ─────────────────────────────────────────
-        var repository = new ObjectRepository(dbPath, libraryPath);
-        var library    = new LibraryManager(libraryPath, repository);
-        var ipc        = new IpcBridge(repository, library);
+        var repository     = new ObjectRepository(dbPath, libraryPath);
+        var thumbnailQueue = new ThumbnailQueue(repository, System.IO.Path.Combine(libraryPath, "Thumbnails"));
+        var library        = new LibraryManager(libraryPath, repository, thumbnailQueue);
+        var ipc            = new IpcBridge(repository, library);
 
         // ── URL do frontend ──────────────────────────────────────────────
         // Em Debug, usa o Vite dev server (npm run dev deve estar rodando).
@@ -89,12 +90,18 @@ internal static class Program
             return false; // false = permitir fechar
         });
 
+        // Conecta push C# → frontend e notificações de thumbnail
+        ipc.SetPushAction(msg => window.SendWebMessage(msg));
+        thumbnailQueue.OnThumbnailReady = (objectId, path) =>
+            ipc.Push(new { @event = "thumbnailReady", objectId, thumbnailPath = path });
+
         if (frontendUrl.StartsWith("http"))
             window.Load(new Uri(frontendUrl));
         else
             window.Load(new Uri(frontendUrl));
 
         window.WaitForClose();
+        thumbnailQueue.Dispose();
     }
 
     private static string ResolveFrontendUrl()

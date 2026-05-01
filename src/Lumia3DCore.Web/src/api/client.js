@@ -7,6 +7,7 @@
  * Protocolo:
  *   Request : { action: string, payload?: object }
  *   Response: { success: bool, data?: any, error?: string }
+ *   Push    : { event: string, ...campos }  (C# → frontend, sem request correspondente)
  */
 
 const IS_PHOTINO = typeof window !== 'undefined' && typeof window.external?.sendMessage === 'function';
@@ -14,15 +15,37 @@ const IS_PHOTINO = typeof window !== 'undefined' && typeof window.external?.send
 // Fila de callbacks para associar respostas com requests (Photino não tem IDs nativos)
 let _pendingCallbacks = [];
 
+// Listeners para eventos push (C# → frontend)
+const _eventListeners = {};
+
+function _emitEvent(eventName, data) {
+  (_eventListeners[eventName] ?? []).forEach((fn) => fn(data));
+}
+
+function _onEvent(eventName, fn) {
+  if (!_eventListeners[eventName]) _eventListeners[eventName] = [];
+  _eventListeners[eventName].push(fn);
+  // Retorna função para remover o listener
+  return () => {
+    _eventListeners[eventName] = (_eventListeners[eventName] ?? []).filter((f) => f !== fn);
+  };
+}
+
 if (IS_PHOTINO) {
   window.external.receiveMessage((responseJson) => {
-    const callback = _pendingCallbacks.shift();
-    if (callback) {
-      try {
-        callback(null, JSON.parse(responseJson));
-      } catch (e) {
-        callback(e, null);
+    try {
+      const msg = JSON.parse(responseJson);
+      if (msg.event) {
+        // Evento push sem request correspondente
+        _emitEvent(msg.event, msg);
+      } else {
+        // Resposta a um request pendente
+        const callback = _pendingCallbacks.shift();
+        if (callback) callback(null, msg);
       }
+    } catch (e) {
+      const callback = _pendingCallbacks.shift();
+      if (callback) callback(e, null);
     }
   });
 }
@@ -35,7 +58,6 @@ if (IS_PHOTINO) {
  */
 function send(action, payload = {}) {
   if (!IS_PHOTINO) {
-    // Dev mock: retorna dados do módulo data.js
     return import('../data.js').then((m) => devMock(action, payload, m));
   }
 
@@ -78,6 +100,12 @@ function devMock(action, payload, data) {
         commit: 'dev',
         repoUrl: 'https://github.com/LumiaLabsBR/Lumia3D-Core',
       });
+    case 'getSettings':
+      return Promise.resolve({
+        theme: 'dark', density: 'comfortable', viewMode: 'gallery', sortOrder: 'DateDesc',
+        sidebarWidth: 260, autoCheckUpdates: false, includePreReleases: false,
+        lastRepositoryPath: '', recentRepositories: [], thumbnailWorkerCount: null,
+      });
     default:
       return Promise.resolve(null);
   }
@@ -85,26 +113,45 @@ function devMock(action, payload, data) {
 
 // ── API pública ────────────────────────────────────────────────────────────
 export const api = {
-  getObjects:      (categoryId = null, tagId = null) => send('getObjects', { categoryId, tagId }),
-  searchObjects:   (term, categoryId = null, tagId = null) => send('searchObjects', { term, categoryId, tagId }),
-  getCategories:   () => send('getCategories'),
-  getTags:         () => send('getTags'),
-  getAttachments:  (objectId) => send('getAttachments', { objectId }),
+  // Leitura
+  getObjects:          (categoryId = null, tagId = null) => send('getObjects', { categoryId, tagId }),
+  searchObjects:       (term, categoryId = null, tagId = null) => send('searchObjects', { term, categoryId, tagId }),
+  getCategories:       () => send('getCategories'),
+  getTags:             () => send('getTags'),
+  getAttachments:      (objectId) => send('getAttachments', { objectId }),
+  getAppInfo:          () => send('getAppInfo'),
+  getSettings:         () => send('getSettings'),
 
-  // Fase 2+: chamadas de mutação (ainda não wired no IpcBridge)
-  importFile:      (filePath, categoryId = null) => send('importFile', { filePath, categoryId }),
-  importFolder:    (folderPath, parentCategoryId = null) => send('importFolder', { folderPath, parentCategoryId }),
-  deleteObject:    (id) => send('deleteObject', { id }),
-  updateObject:    (id, name, description) => send('updateObject', { id, name, description }),
-  addTagToObject:  (objectId, tagId) => send('addTagToObject', { objectId, tagId }),
+  // Import
+  importFile:          (filePath, categoryId = null) => send('importFile', { filePath, categoryId }),
+  importFolder:        (folderPath, parentCategoryId = null) => send('importFolder', { folderPath, parentCategoryId }),
+  cancelImport:        () => send('cancelImport'),
+
+  // Objetos
+  deleteObject:        (id) => send('deleteObject', { id }),
+  updateObject:        (id, name, description, categoryId) => send('updateObject', { id, name, description, categoryId }),
+
+  // Tags
+  addTagToObject:      (objectId, tagId) => send('addTagToObject', { objectId, tagId }),
   removeTagFromObject: (objectId, tagId) => send('removeTagFromObject', { objectId, tagId }),
-  createCategory:  (name, parentCategoryId = null) => send('createCategory', { name, parentCategoryId }),
-  deleteCategory:  (id) => send('deleteCategory', { id }),
-  addAttachment:   (objectId, filePath) => send('addAttachment', { objectId, filePath }),
-  deleteAttachment:(id) => send('deleteAttachment', { id }),
+  createTag:           (name, color = null) => send('createTag', { name, color }),
+  updateTag:           (tagId, color) => send('updateTag', { tagId, color }),
+  deleteTag:           (tagId) => send('deleteTag', { tagId }),
+
+  // Categorias
+  createCategory:      (name, parentCategoryId = null) => send('createCategory', { name, parentCategoryId }),
+  updateCategory:      (id, name, parentCategoryId = null, sortOrder = 0) => send('updateCategory', { id, name, parentCategoryId, sortOrder }),
+  deleteCategory:      (id) => send('deleteCategory', { id }),
+
+  // Anexos
+  addAttachment:       (objectId, filePath) => send('addAttachment', { objectId, filePath }),
+  deleteAttachment:    (id) => send('deleteAttachment', { id }),
+
+  // Thumbnails & configurações
   regenerateThumbnail: (objectId) => send('regenerateThumbnail', { objectId }),
-  getAppInfo:      () => send('getAppInfo'),
-  getSettings:     () => send('getSettings'),
-  saveSettings:    (settings) => send('saveSettings', { settings }),
-  checkForUpdate:  () => send('checkForUpdate'),
+  saveSettings:        (settings) => send('saveSettings', { settings }),
+  checkForUpdate:      () => send('checkForUpdate'),
+
+  // Eventos push (C# → frontend)
+  on:  (eventName, handler) => _onEvent(eventName, handler),
 };

@@ -212,6 +212,15 @@ public class ObjectRepository
             "SELECT COUNT(*) FROM Object3D WHERE CategoryId = @Id", new { Id = categoryId });
     }
 
+    public Object3D? GetObject(int id)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        var obj = connection.QueryFirstOrDefault<Object3D>(
+            "SELECT * FROM Object3D WHERE Id = @Id", new { Id = id });
+        if (obj != null) ResolvePaths(obj);
+        return obj;
+    }
+
     public Object3D? GetObjectByHash(string hash)
     {
         using var connection = new SqliteConnection(_connectionString);
@@ -219,6 +228,15 @@ public class ObjectRepository
             "SELECT * FROM Object3D WHERE Hash = @Hash", new { Hash = hash });
         if (obj != null) ResolvePaths(obj);
         return obj;
+    }
+
+    public Attachment? GetAttachment(int id)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        var att = connection.QueryFirstOrDefault<Attachment>(
+            "SELECT * FROM Attachment WHERE Id = @Id", new { Id = id });
+        if (att != null) ResolvePaths(att);
+        return att;
     }
 
     public void DeleteObject(int objectId)
