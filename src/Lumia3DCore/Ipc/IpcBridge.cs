@@ -36,6 +36,7 @@ public class IpcBridge
 
             var response = request.Action switch
             {
+                "getAppInfo"     => HandleGetAppInfo(),
                 "getObjects"     => HandleGetObjects(request),
                 "searchObjects"  => HandleSearchObjects(request),
                 "getCategories"  => HandleGetCategories(),
@@ -68,6 +69,15 @@ public class IpcBridge
             return Serialize(IpcResponse.Fail(ex.Message));
         }
     }
+
+    private static IpcResponse HandleGetAppInfo() => IpcResponse.Ok(new
+    {
+        version   = VersionInfo.Current,
+        shortVersion = VersionInfo.Short,
+        buildDate = VersionInfo.BuildDate,
+        commit    = VersionInfo.Commit,
+        repoUrl   = "https://github.com/LumiaLabsBR/Lumia3D-Core"
+    });
 
     private IpcResponse HandleGetObjects(IpcRequest req)
     {

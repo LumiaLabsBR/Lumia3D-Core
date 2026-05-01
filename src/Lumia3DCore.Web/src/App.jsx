@@ -1,10 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { LUMIA_DATA } from './data.js';
+import { api } from './api/client.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Header } from './components/Header.jsx';
 import { Library } from './components/Library.jsx';
 import { ModelDetail } from './components/Detail.jsx';
 import { TweaksPanel } from './components/TweaksPanel.jsx';
+import { StatusBar } from './components/StatusBar.jsx';
+import { AboutModal } from './components/AboutModal.jsx';
 import { Icon } from './components/Icons.jsx';
 
 const WindowChrome = ({ onTweaks }) => (
@@ -76,6 +79,12 @@ export default function App() {
   const [importing, setImporting] = useState(null);
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [tweaks, setTweaks] = useState({ theme: 'dark', density: 'comfortable' });
+  const [appInfo, setAppInfo] = useState(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
+
+  useEffect(() => {
+    api.getAppInfo().then(setAppInfo).catch(() => {});
+  }, []);
 
   const toggleTag = useCallback((t) => {
     setActiveTags(prev => {
@@ -151,9 +160,15 @@ export default function App() {
           <Library models={models} view={view} onOpen={setActive} />
         </main>
       </div>
+      <StatusBar
+        modelCount={models.length}
+        appInfo={appInfo}
+        onAbout={() => setAboutOpen(true)}
+      />
       {active && <ModelDetail model={active} onClose={() => setActive(null)} />}
       {importing != null && <Toast progress={importing} />}
       {tweaksOpen && <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} onClose={() => setTweaksOpen(false)} />}
+      {aboutOpen && <AboutModal appInfo={appInfo} onClose={() => setAboutOpen(false)} />}
     </div>
   );
 }

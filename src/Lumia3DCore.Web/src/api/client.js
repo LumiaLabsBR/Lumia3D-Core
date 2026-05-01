@@ -70,6 +70,14 @@ function devMock(action, payload, data) {
       return Promise.resolve(tags);
     case 'getAttachments':
       return Promise.resolve([]);
+    case 'getAppInfo':
+      return Promise.resolve({
+        version: '0.1.0-alpha.1-dev',
+        shortVersion: '0.1.0',
+        buildDate: '2026-05-01',
+        commit: 'dev',
+        repoUrl: 'https://github.com/LumiaLabsBR/Lumia3D-Core',
+      });
     default:
       return Promise.resolve(null);
   }
@@ -95,6 +103,7 @@ export const api = {
   addAttachment:   (objectId, filePath) => send('addAttachment', { objectId, filePath }),
   deleteAttachment:(id) => send('deleteAttachment', { id }),
   regenerateThumbnail: (objectId) => send('regenerateThumbnail', { objectId }),
+  getAppInfo:      () => send('getAppInfo'),
   getSettings:     () => send('getSettings'),
   saveSettings:    (settings) => send('saveSettings', { settings }),
   checkForUpdate:  () => send('checkForUpdate'),
