@@ -8,4 +8,7 @@ public class Tag
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Color { get; set; }
+
+    /// <summary>Não persistido — populado por GetAllTags via subquery.</summary>
+    public int Count { get; set; }
 }

@@ -63,6 +63,12 @@ public class LibraryManager
                 newFileCopied = true;
             }
 
+            // Extrai metadata (triangulos + bbox) do arquivo recém-copiado.
+            // Falhas são tolerantes: retorna Empty e continua.
+            var meta = MetadataExtractor.Extract(destinationFilePath);
+            long fileSize = 0;
+            try { fileSize = new FileInfo(destinationFilePath).Length; } catch { }
+
             var newObject = new Object3D
             {
                 Name = SanitizeName(Path.GetFileNameWithoutExtension(fileInfo.Name)),
@@ -71,7 +77,12 @@ public class LibraryManager
                 ThumbnailPath = string.Empty,
                 Hash = hash,
                 CategoryId = categoryId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                FileSize      = fileSize,
+                TriangleCount = meta.TriangleCount,
+                Width         = meta.Width,
+                Height        = meta.Height,
+                Depth         = meta.Depth,
             };
 
             _repository.AddObject(newObject);

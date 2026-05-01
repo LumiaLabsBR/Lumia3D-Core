@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -128,7 +129,9 @@ public class IpcBridge
             ? cProp.GetInt32() : null;
         int? tagId = req.Payload.TryGetProperty("tagId", out var tProp) && tProp.ValueKind != JsonValueKind.Null
             ? tProp.GetInt32() : null;
-        return IpcResponse.Ok(_repository.GetAllObjects(categoryId, tagId));
+        var objs = _repository.GetAllObjects(categoryId, tagId).ToList();
+        _repository.PopulateTags(objs);
+        return IpcResponse.Ok(objs);
     }
 
     private IpcResponse HandleSearchObjects(IpcRequest req)
@@ -138,7 +141,9 @@ public class IpcBridge
             ? cProp.GetInt32() : null;
         int? tagId = req.Payload.TryGetProperty("tagId", out var tagProp) && tagProp.ValueKind != JsonValueKind.Null
             ? tagProp.GetInt32() : null;
-        return IpcResponse.Ok(_repository.SearchObjects(term, categoryId, tagId));
+        var objs = _repository.SearchObjects(term, categoryId, tagId).ToList();
+        _repository.PopulateTags(objs);
+        return IpcResponse.Ok(objs);
     }
 
     private IpcResponse HandleGetCategories()   => IpcResponse.Ok(_repository.GetAllCategories());

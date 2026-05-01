@@ -9,4 +9,7 @@ public class Category
     public string Name { get; set; } = string.Empty;
     public int? ParentCategoryId { get; set; }
     public int SortOrder { get; set; }
+
+    /// <summary>Não persistido — populado por GetAllCategories via subquery.</summary>
+    public int Count { get; set; }
 }

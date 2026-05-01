@@ -89,6 +89,41 @@ public class ObjectRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void PopulateTags_AttachesTagNamesToEachObject()
+    {
+        var o1 = MakeObject("X1"); _env.Repository.AddObject(o1);
+        var o2 = MakeObject("X2"); _env.Repository.AddObject(o2);
+        var t1 = _env.Repository.AddOrGetTag("metal");
+        var t2 = _env.Repository.AddOrGetTag("liso");
+
+        _env.Repository.AddTagToObject(o1.Id, t1.Id);
+        _env.Repository.AddTagToObject(o1.Id, t2.Id);
+        _env.Repository.AddTagToObject(o2.Id, t2.Id);
+
+        var objs = _env.Repository.GetAllObjects().ToList();
+        _env.Repository.PopulateTags(objs);
+
+        objs.Single(o => o.Id == o1.Id).Tags.Should().BeEquivalentTo(new[] { "metal", "liso" });
+        objs.Single(o => o.Id == o2.Id).Tags.Should().BeEquivalentTo(new[] { "liso" });
+    }
+
+    [Fact]
+    public void GetAllTags_IncludesUsageCount()
+    {
+        var o1 = MakeObject("X1"); _env.Repository.AddObject(o1);
+        var o2 = MakeObject("X2"); _env.Repository.AddObject(o2);
+        var t1 = _env.Repository.AddOrGetTag("popular");
+        var t2 = _env.Repository.AddOrGetTag("solitaria");
+        _env.Repository.AddTagToObject(o1.Id, t1.Id);
+        _env.Repository.AddTagToObject(o2.Id, t1.Id);
+        _env.Repository.AddTagToObject(o1.Id, t2.Id);
+
+        var tags = _env.Repository.GetAllTags().ToList();
+        tags.Single(t => t.Name == "popular").Count.Should().Be(2);
+        tags.Single(t => t.Name == "solitaria").Count.Should().Be(1);
+    }
+
+    [Fact]
     public void GetStats_ReturnsCountAndTotalSize()
     {
         // Cria 2 arquivos reais e referencia em Object3D para que GetStats some os tamanhos.

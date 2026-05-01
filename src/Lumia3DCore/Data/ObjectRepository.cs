@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -61,8 +62,10 @@ public class ObjectRepository
     {
         using var connection = new SqliteConnection(_connectionString);
         var sql = @"
-            INSERT INTO Object3D (Name, Description, MainFilePath, FileType, ThumbnailPath, Hash, CategoryId, CreatedAt)
-            VALUES (@Name, @Description, @MainFilePath, @FileType, @ThumbnailPath, @Hash, @CategoryId, @CreatedAt);
+            INSERT INTO Object3D (Name, Description, MainFilePath, FileType, ThumbnailPath, Hash, CategoryId, CreatedAt,
+                                  FileSize, TriangleCount, Width, Height, Depth)
+            VALUES (@Name, @Description, @MainFilePath, @FileType, @ThumbnailPath, @Hash, @CategoryId, @CreatedAt,
+                    @FileSize, @TriangleCount, @Width, @Height, @Depth);
             SELECT last_insert_rowid();";
 
         obj.Id = connection.QuerySingle<int>(sql, new
@@ -71,7 +74,8 @@ public class ObjectRepository
             MainFilePath = MakeRelative(obj.MainFilePath),
             obj.FileType,
             ThumbnailPath = MakeRelative(obj.ThumbnailPath),
-            obj.Hash, obj.CategoryId, obj.CreatedAt
+            obj.Hash, obj.CategoryId, obj.CreatedAt,
+            obj.FileSize, obj.TriangleCount, obj.Width, obj.Height, obj.Depth
         });
     }
 
@@ -196,7 +200,9 @@ public class ObjectRepository
     public IEnumerable<Tag> GetAllTags()
     {
         using var connection = new SqliteConnection(_connectionString);
-        return connection.Query<Tag>("SELECT * FROM Tag ORDER BY Name");
+        return connection.Query<Tag>(@"
+            SELECT t.*, (SELECT COUNT(*) FROM ObjectTag ot WHERE ot.TagId = t.Id) AS Count
+            FROM Tag t ORDER BY t.Name");
     }
 
     public void DeleteTag(int tagId)
@@ -209,7 +215,9 @@ public class ObjectRepository
     public IEnumerable<Category> GetAllCategories()
     {
         using var connection = new SqliteConnection(_connectionString);
-        return connection.Query<Category>("SELECT * FROM Category ORDER BY SortOrder, Name");
+        return connection.Query<Category>(@"
+            SELECT c.*, (SELECT COUNT(*) FROM Object3D o WHERE o.CategoryId = c.Id) AS Count
+            FROM Category c ORDER BY c.SortOrder, c.Name");
     }
 
     public void AddCategory(Category category)
@@ -309,6 +317,29 @@ public class ObjectRepository
         connection.Execute(
             "UPDATE Object3D SET CategoryId = NULL WHERE CategoryId = @Id", new { Id = id }, transaction);
         connection.Execute("DELETE FROM Category WHERE Id = @Id", new { Id = id }, transaction);
+    }
+
+    /// <summary>
+    /// Popula a propriedade <see cref="Object3D.Tags"/> de cada objeto via JOIN ObjectTag/Tag.
+    /// Uma única query, agrupada por ObjectId — muito mais barato que N+1.
+    /// </summary>
+    public void PopulateTags(IEnumerable<Object3D> objects)
+    {
+        var list = objects?.ToList();
+        if (list == null || list.Count == 0) return;
+
+        using var connection = new SqliteConnection(_connectionString);
+        var ids = list.Select(o => o.Id).ToArray();
+        var rows = connection.Query<(int ObjectId, string Name)>(@"
+            SELECT ot.ObjectId, t.Name
+            FROM ObjectTag ot
+            JOIN Tag t ON t.Id = ot.TagId
+            WHERE ot.ObjectId IN @Ids", new { Ids = ids }).ToList();
+
+        var byId = rows.GroupBy(r => r.ObjectId)
+                       .ToDictionary(g => g.Key, g => g.Select(r => r.Name).ToArray());
+        foreach (var obj in list)
+            obj.Tags = byId.TryGetValue(obj.Id, out var tags) ? tags : Array.Empty<string>();
     }
 
     public IEnumerable<Object3D> GetAllObjects(int? categoryId = null, int? tagId = null)

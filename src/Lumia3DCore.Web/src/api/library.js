@@ -27,9 +27,22 @@ function fileToUrl(absolutePath) {
   return 'file:///' + absolutePath.replace(/\\/g, '/');
 }
 
+function fmtDim(v) {
+  if (!v || !isFinite(v)) return null;
+  // Heurística: se >= 100 mostra como mm, senão como cm
+  return v >= 100 ? Math.round(v) + ' mm' : v.toFixed(1) + ' mm';
+}
+
+function fmtDims(w, h, d) {
+  const a = fmtDim(w), b = fmtDim(h), c = fmtDim(d);
+  if (!a && !b && !c) return '—';
+  return [a, b, c].filter(Boolean).join(' × ');
+}
+
 function adaptObject(o) {
   const ext = (o.fileType || '').replace('.', '').toLowerCase();
   const fileName = (o.mainFilePath || '').split(/[\\/]/).pop() || '';
+  const sizeBytes = o.fileSize ?? 0;
   return {
     id:           o.id,
     name:         o.name || fileName,
@@ -41,12 +54,12 @@ function adaptObject(o) {
     hash:         o.hash || '',
     cat:          o.categoryId || null,
     date:         (o.createdAt || '').slice(0, 10),
-    // Campos que o backend ainda não computa — defaults seguros (TODO Fase 11):
+    tags:         o.tags || [],
+    sizeKB:       Math.round(sizeBytes / 1024),
+    polys:        o.triangleCount ?? 0,
+    dims:         fmtDims(o.width, o.height, o.depth),
+    // Campos sem equivalente no backend ainda:
     shape:        'cube',
-    tags:         [],
-    sizeKB:       0,
-    polys:        0,
-    dims:         '—',
     attachments:  0,
     dup:          null,
   };

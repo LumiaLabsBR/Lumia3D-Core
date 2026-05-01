@@ -17,7 +17,15 @@ public class Object3D
     public int? CategoryId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    // Metadados extraídos do arquivo no import (migration 003)
+    public long   FileSize      { get; set; }
+    public int    TriangleCount { get; set; }
+    public double Width         { get; set; }
+    public double Height        { get; set; }
+    public double Depth         { get; set; }
+
     // Campos auxiliares (não persistidos)
     public string? CategoryName { get; set; }
     public string RelativeFilePath { get; set; } = string.Empty;
+    public string[] Tags { get; set; } = Array.Empty<string>();
 }
