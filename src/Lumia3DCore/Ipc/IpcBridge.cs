@@ -96,6 +96,8 @@ public class IpcBridge
                 "windowClose"         => HandleWindowAction("close"),
 
                 "openExternal"        => HandleOpenExternal(request),
+                "pickFiles"           => HandlePickFiles(),
+                "pickFolder"          => HandlePickFolder(),
 
                 _ => IpcResponse.Fail($"Unknown action: {request.Action}")
             };
@@ -536,6 +538,55 @@ public class IpcBridge
     {
         _windowAction?.Invoke(action);
         return IpcResponse.Ok(null);
+    }
+
+    // ── File / Folder picker (nativo Win32 — WebView2 esconde paths reais) ───
+
+    private IpcResponse HandlePickFiles()
+    {
+        // OpenFileDialog requer STA. O Photino chama os handlers da UI thread,
+        // que já é STA (definida pelo [STAThread] em Program.Main).
+        try
+        {
+            using var dlg = new System.Windows.Forms.OpenFileDialog
+            {
+                Title       = "Importar modelos 3D",
+                Filter      = "Modelos 3D (*.stl;*.obj;*.3mf;*.step;*.stp)|*.stl;*.obj;*.3mf;*.step;*.stp|Todos os arquivos|*.*",
+                Multiselect = true,
+                CheckFileExists = true,
+            };
+            var result = dlg.ShowDialog();
+            return result == System.Windows.Forms.DialogResult.OK
+                ? IpcResponse.Ok(new { paths = dlg.FileNames })
+                : IpcResponse.Ok(new { paths = Array.Empty<string>() });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"pickFiles falhou: {ex.Message}");
+            return IpcResponse.Fail(ex.Message);
+        }
+    }
+
+    private IpcResponse HandlePickFolder()
+    {
+        try
+        {
+            using var dlg = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Selecione uma pasta para importar",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton = false,
+            };
+            var result = dlg.ShowDialog();
+            return result == System.Windows.Forms.DialogResult.OK
+                ? IpcResponse.Ok(new { path = dlg.SelectedPath })
+                : IpcResponse.Ok(new { path = (string?)null });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"pickFolder falhou: {ex.Message}");
+            return IpcResponse.Fail(ex.Message);
+        }
     }
 
     private IpcResponse HandleOpenExternal(IpcRequest req)

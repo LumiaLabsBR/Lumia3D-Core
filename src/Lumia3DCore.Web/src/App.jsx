@@ -240,15 +240,27 @@ export default function App() {
   const activeTagsSet = useMemo(() => new Set(filters.activeTags), [filters.activeTags]);
 
   // ── Import handlers ──
-  const importFiles = async (files) => {
-    if (!files?.length) return;
+  const IS_PHOTINO = typeof window !== 'undefined' && typeof window.external?.sendMessage === 'function';
+
+  const runImport = async (importer) => {
     setImporting(0);
-    await library.importFiles(files, ({ progress, stage }) => {
+    const result = await importer(({ progress, stage }) => {
       setImporting(progress);
       setImportStage(stage);
     });
     refreshMeta(); refreshModels();
     setTimeout(() => { setImporting(null); setImportStage(''); }, 600);
+    return result;
+  };
+
+  const importFiles = (files) => {
+    if (!files?.length) return;
+    return runImport((onProgress) => library.importFiles(files, onProgress));
+  };
+
+  const importPaths = (paths) => {
+    if (!paths?.length) return;
+    return runImport((onProgress) => library.importPaths(paths, onProgress));
   };
 
   const onDrop = (e) => {
@@ -256,10 +268,19 @@ export default function App() {
     importFiles(Array.from(e.dataTransfer?.files || []));
   };
 
-  const onPickFiles = () => fileInputRef.current?.click();
+  // Em Photino: chama dialog Win32 nativo (paths reais).
+  // Em dev (browser): cai no <input type="file"> escondido.
+  const onPickFiles = async () => {
+    if (IS_PHOTINO) {
+      const paths = await ipc.pickFiles();
+      importPaths(paths);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
   const onFilesPicked = (e) => {
     importFiles(Array.from(e.target.files || []));
-    e.target.value = ''; // permite re-selecionar os mesmos arquivos
+    e.target.value = '';
   };
 
   // ── Menus ──

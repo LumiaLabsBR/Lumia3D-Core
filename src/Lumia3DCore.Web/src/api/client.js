@@ -164,6 +164,10 @@ export const api = {
   windowClose:     () => send('windowClose'),
   openExternal:    (url) => send('openExternal', { url }),
 
+  // Native pickers (WebView2 esconde File.path; precisa de dialog Win32)
+  pickFiles:       () => send('pickFiles').then(r => r?.paths ?? []),
+  pickFolder:      () => send('pickFolder').then(r => r?.path ?? null),
+
   // Eventos push (C# → frontend)
   on:  (eventName, handler) => _onEvent(eventName, handler),
 };

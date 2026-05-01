@@ -122,21 +122,35 @@ const photinoApi = {
   },
 
   async importFiles(files, onProgress) {
-    // Photino: importa cada arquivo via IPC. Para drag-and-drop nativo, o file path
-    // precisa ser absoluto (File.path no Photino traz o caminho real, ao contrário
-    // do navegador que esconde por segurança).
-    const total = files?.length || 0;
-    let done = 0;
-    for (const f of files || []) {
-      const path = f.path || f.name;
-      onProgress?.({ progress: (done / total) * 100, stage: 'hash', count: total });
-      try { await ipc.importFile(path, null); }
-      catch (e) { console.warn('[Lumia3D] importFile falhou', path, e); }
-      done++;
-      onProgress?.({ progress: (done / total) * 100, stage: 'index', count: total });
+    // Drag-and-drop em WebView2: f.path é vazio por segurança. Tenta usar
+    // mesmo assim — se falhar, usuario deve usar o botão Importar (que chama
+    // pickFiles → dialog nativo com paths reais).
+    const paths = (files || []).map((f) => f.path).filter(Boolean);
+    if (paths.length === 0 && files?.length > 0) {
+      console.warn('[Lumia3D] drag-and-drop sem paths reais — use o botão Importar');
+      onProgress?.({ progress: 100, stage: 'done', count: 0 });
+      return { imported: 0, duplicates: 0, error: 'drag-and-drop sem path' };
+    }
+    return await this.importPaths(paths, onProgress);
+  },
+
+  async importPaths(paths, onProgress) {
+    const total = paths?.length || 0;
+    let imported = 0;
+    let duplicates = 0;
+    for (const path of paths || []) {
+      onProgress?.({ progress: (imported / total) * 100, stage: 'hash', count: total });
+      try {
+        const result = await ipc.importFile(path, null);
+        // Backend retorna { obj } com objeto novo OU existente (dedup por hash)
+        if (result?.obj) imported++;
+      } catch (e) {
+        console.warn('[Lumia3D] importFile falhou', path, e);
+      }
+      onProgress?.({ progress: ((imported + duplicates) / total) * 100, stage: 'index', count: total });
     }
     onProgress?.({ progress: 100, stage: 'done', count: total });
-    return { imported: done, duplicates: 0 };
+    return { imported, duplicates };
   },
 
   async stats() {
@@ -220,6 +234,10 @@ const mockApi = {
     }
     onProgress?.({ progress: 100, stage: 'done', count: files?.length ?? 1 });
     return { imported: files?.length ?? 1, duplicates: 0 };
+  },
+
+  async importPaths(paths, onProgress) {
+    return await this.importFiles((paths || []).map((p) => ({ name: p })), onProgress);
   },
 
   async stats() {
