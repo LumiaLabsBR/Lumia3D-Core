@@ -56,12 +56,15 @@ internal static class Program
         // ── Janela Photino ───────────────────────────────────────────────
         var settings = UserSettings.Load();
 
+        string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
+
         var window = new PhotinoWindow()
             .SetTitle(AppName)
             .SetWidth((int)settings.WindowWidth)
             .SetHeight((int)settings.WindowHeight)
             .SetDevToolsEnabled(IsDebug())
             .SetContextMenuEnabled(IsDebug())
+            .SetIconFile(File.Exists(iconPath) ? iconPath : string.Empty)
             .RegisterWebMessageReceivedHandler((object? sender, string message) =>
             {
                 string responseJson = ipc.Handle(message);

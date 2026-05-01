@@ -8,6 +8,7 @@ import { ModelDetail } from './components/Detail.jsx';
 import { TweaksPanel } from './components/TweaksPanel.jsx';
 import { StatusBar } from './components/StatusBar.jsx';
 import { AboutModal } from './components/AboutModal.jsx';
+import { LoadingSplash } from './components/LoadingSplash.jsx';
 import { Icon } from './components/Icons.jsx';
 
 const WindowChrome = ({ onTweaks }) => (
@@ -81,9 +82,13 @@ export default function App() {
   const [tweaks, setTweaks] = useState({ theme: 'dark', density: 'comfortable' });
   const [appInfo, setAppInfo] = useState(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getAppInfo().then(setAppInfo).catch(() => {});
+    api.getAppInfo()
+      .then(setAppInfo)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const toggleTag = useCallback((t) => {
@@ -169,6 +174,7 @@ export default function App() {
       {importing != null && <Toast progress={importing} />}
       {tweaksOpen && <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} onClose={() => setTweaksOpen(false)} />}
       {aboutOpen && <AboutModal appInfo={appInfo} onClose={() => setAboutOpen(false)} />}
+      <LoadingSplash visible={loading} />
     </div>
   );
 }

@@ -27,7 +27,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
     <!-- Ícone e manifesto Windows -->
-    <!-- <ApplicationIcon>Assets\icon.ico</ApplicationIcon> -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Em desenvolvimento não publicamos single-file; apenas no Release -->
@@ -46,6 +46,11 @@
     <!-- Geração de thumbnails -->
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
+  </ItemGroup>
+
+  <!-- Assets: ícone embutido no executável e copiado ao output -->
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- wwwroot (build do frontend React) copiado para output -->

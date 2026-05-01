@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^v', ''
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "Version: $v"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/Lumia3DCore.Web/package-lock.json
+
+      - name: Build frontend
+        working-directory: src/Lumia3DCore.Web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run tests
+        run: dotnet test src/Lumia3DCore.Tests/Lumia3DCore.Tests.csproj -c Release
+
+      - name: Generate icon
+        shell: pwsh
+        run: pwsh tools/generate-icon.ps1
+
+      - name: Publish Windows (self-contained)
+        shell: pwsh
+        run: |
+          dotnet publish src/Lumia3DCore/Lumia3DCore.csproj `
+            -c Release -r win-x64 --self-contained `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:PublishSingleFile=true `
+            -o publish/Lumia3DCore-win-x64
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc /DAppVersion=${{ steps.version.outputs.version }} installer\Lumia3DCore.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou" }
+          New-Item -ItemType Directory -Force installer-output | Out-Null
+
+      - name: Compute SHA256
+        id: sha256
+        shell: pwsh
+        run: |
+          $exe = "installer-output\Lumia3DCore-Setup-${{ steps.version.outputs.version }}.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          echo "hash=$hash" >> $env:GITHUB_OUTPUT
+          echo "SHA256: $hash"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows
+          path: installer-output/Lumia3DCore-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Attest installer
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: installer-output/Lumia3DCore-Setup-*.exe
+
+  release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: installer-windows
+          path: dist/
+
+      - name: Compute checksums
+        id: checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          # Extrai a seção do CHANGELOG.md para a versão atual
+          VERSION="${{ needs.build-windows.outputs.version }}"
+          NOTES=$(awk "/^## \[?v?${VERSION//./\\.}/"'{found=1; next} found && /^## /{exit} found{print}' CHANGELOG.md)
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Lumia3D Core v${{ needs.build-windows.outputs.version }}"
+          body: |
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+            **SHA-256 do instalador**
+            ```
+            ${{ steps.checksums.outputs.sha256 }}
+            ```
+            > O Lumia3D Core é 100% local. A única chamada de rede é a verificação opcional de updates.
+          files: |
+            dist/Lumia3DCore-Setup-*.exe
+            dist/SHA256SUMS.txt
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
