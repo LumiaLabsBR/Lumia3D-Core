@@ -48,14 +48,24 @@
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
   </ItemGroup>
 
-  <!-- Assets: ícone embutido no executável e copiado ao output -->
+  <!-- Assets: ícone embutido no executável (ApplicationIcon) e copiado para output/publish -->
   <ItemGroup>
-    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\icon.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- wwwroot (build do frontend React) copiado para output -->
+  <!-- Workaround: PublishSingleFile ignora CopyToPublishDirectory para Content/None.
+       Cópia explícita após o publish completar. -->
+  <Target Name="CopyAssetsToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_AssetsToPublish Include="Assets\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_AssetsToPublish)"
+          DestinationFiles="@(_AssetsToPublish->'$(PublishDir)Assets\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <!-- wwwroot (build do frontend React) copiado para output e publish -->
   <ItemGroup>
-    <Content Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Migrations SQL embutidas no assembly -->

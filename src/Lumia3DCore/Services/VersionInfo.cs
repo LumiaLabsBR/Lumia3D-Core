@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 
@@ -49,13 +50,16 @@ public static class VersionInfo
 
     private static string ResolveBuildDate()
     {
+        // Em single-file publish, Assembly.Location é "" (IL3000); usar AppContext.BaseDirectory + nome do exe.
         try
         {
-            string? asmPath = _asm.Location;
-            if (!string.IsNullOrEmpty(asmPath) && File.Exists(asmPath))
-                return File.GetLastWriteTimeUtc(asmPath).ToString("yyyy-MM-dd");
+            string baseDir = AppContext.BaseDirectory;
+            string exeName = Process.GetCurrentProcess().ProcessName + ".exe";
+            string exePath = Path.Combine(baseDir, exeName);
+            if (File.Exists(exePath))
+                return File.GetLastWriteTimeUtc(exePath).ToString("yyyy-MM-dd");
         }
-        catch { }
+        catch (Exception ex) { AppLogger.Warn($"VersionInfo: BuildDate fallback ({ex.Message})"); }
         return DateTime.UtcNow.ToString("yyyy-MM-dd");
     }
 }

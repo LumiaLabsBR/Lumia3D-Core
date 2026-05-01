@@ -117,10 +117,25 @@ public static class UpdateChecker
         string tempDir = Path.Combine(Path.GetTempPath(), "Lumia3DCore_Update");
         Directory.CreateDirectory(tempDir);
 
-        string installerName = Uri.TryCreate(info.InstallerUrl, UriKind.Absolute, out var uri)
+        // Path traversal defense: usar APENAS o filename sem componentes de path,
+        // e validar que o resultado fica dentro de tempDir antes de baixar/executar.
+        string rawName = Uri.TryCreate(info.InstallerUrl, UriKind.Absolute, out var uri)
             ? Path.GetFileName(uri.LocalPath)
             : "Lumia3DCore-Setup.exe";
-        string installerPath = Path.Combine(tempDir, installerName);
+
+        string safeName = Path.GetFileName(rawName); // descarta qualquer ../ residual
+        if (string.IsNullOrWhiteSpace(safeName) ||
+            !safeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+            safeName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            safeName = "Lumia3DCore-Setup.exe";
+        }
+
+        string installerPath = Path.GetFullPath(Path.Combine(tempDir, safeName));
+        string normalizedTempDir = Path.GetFullPath(tempDir) + Path.DirectorySeparatorChar;
+        if (!installerPath.StartsWith(normalizedTempDir, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Path do instalador escapa do diretório temp: {installerPath}");
 
         try
         {
