@@ -85,7 +85,10 @@ jobs:
           path: installer-output/Lumia3DCore-Setup-*.exe
           if-no-files-found: error
 
+      # Build provenance attestation: requer repo publico ou GitHub Enterprise.
+      # Marcado como continue-on-error para nao bloquear o release em repo privado.
       - name: Attest installer
+        continue-on-error: true
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: installer-output/Lumia3DCore-Setup-*.exe
