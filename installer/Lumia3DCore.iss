@@ -6,7 +6,8 @@
 #define AppPublisher "LumiaLabs"
 #define AppURL       "https://github.com/LumiaLabsBR/Lumia3D-Core"
 #define AppExeName   "Lumia3DCore.exe"
-#define AppGUID      "{A7C3B2D1-5E6F-4A7B-8C9D-0E1F2A3B4C5D}"
+; AppId requer "{{" para escapar a chave literal (Inno usa "{" como marcador de constante).
+#define AppGUID      "{{A7C3B2D1-5E6F-4A7B-8C9D-0E1F2A3B4C5D}"
 
 [Setup]
 AppId={#AppGUID}
