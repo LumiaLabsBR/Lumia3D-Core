@@ -89,6 +89,23 @@ public class ObjectRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void ForeignKeyConstraint_RejectsInvalidObjectIdInAttachment()
+    {
+        // Confirma que PRAGMA foreign_keys=ON está ativo na conexão.
+        // Sem esse pragma, o SQLite aceitaria silenciosamente o ObjectId fantasma.
+        var att = new Lumia3DCore.Models.Attachment
+        {
+            ObjectId = 999999,  // não existe
+            FilePath = Path.Combine(_env.LibraryPath, "ghost.pdf"),
+            Type     = ".pdf",
+        };
+
+        Action act = () => _env.Repository.AddAttachment(att);
+        act.Should().Throw<Microsoft.Data.Sqlite.SqliteException>()
+           .Which.Message.Should().Contain("FOREIGN KEY");
+    }
+
+    [Fact]
     public void UpdateObjectThumbnail_UpdatesPath()
     {
         var obj = MakeObject("Cubo");

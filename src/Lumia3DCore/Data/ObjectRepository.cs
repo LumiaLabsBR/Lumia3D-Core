@@ -19,7 +19,10 @@ public class ObjectRepository
 
     public ObjectRepository(string dbPath, string repoPath)
     {
-        _connectionString = $"Data Source={dbPath};";
+        // Foreign Keys=True garante que toda conexão tenha PRAGMA foreign_keys=ON,
+        // necessário para que o ON DELETE CASCADE em ObjectTag/Attachment funcione.
+        // Sem isso, deletar Object3D deixa rows órfãs (default do SQLite por conexão).
+        _connectionString = $"Data Source={dbPath};Foreign Keys=True;";
         _repoPath = repoPath;
     }
 
