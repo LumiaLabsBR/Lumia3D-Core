@@ -26,6 +26,7 @@ public class IpcBridge
 
     private Action<string>? _push;
     private CancellationTokenSource? _importCts;
+    private CancellationTokenSource? _downloadCts;
 
     public IpcBridge(ObjectRepository repository, LibraryManager library)
     {
@@ -80,6 +81,10 @@ public class IpcBridge
 
                 "getSettings"         => HandleGetSettings(),
                 "saveSettings"        => HandleSaveSettings(request),
+
+                "checkForUpdate"      => HandleCheckForUpdate(),
+                "downloadUpdate"      => HandleDownloadUpdate(request),
+                "cancelDownload"      => HandleCancelDownload(),
 
                 _ => IpcResponse.Fail($"Unknown action: {request.Action}")
             };
@@ -440,6 +445,107 @@ public class IpcBridge
 
         s.Save();
         return IpcResponse.Ok(null);
+    }
+
+    // ── Updates ───────────────────────────────────────────────────────────────
+
+    private IpcResponse HandleCheckForUpdate()
+    {
+        var settings = UserSettings.Load();
+        Task.Run(() => RunUpdateCheckAsync(settings.IncludePreReleases));
+        return IpcResponse.Ok(new { started = true });
+    }
+
+    private IpcResponse HandleDownloadUpdate(IpcRequest req)
+    {
+        if (!req.Payload.TryGetProperty("installerUrl", out var urlProp))
+            return IpcResponse.Fail("installerUrl required");
+
+        string installerUrl  = urlProp.GetString() ?? "";
+        string sha256Url     = req.Payload.TryGetProperty("sha256Url",     out var sha) ? sha.GetString() ?? ""  : "";
+        long   installerSize = req.Payload.TryGetProperty("installerSize", out var sz)  ? sz.GetInt64()          : 0;
+
+        _downloadCts?.Cancel();
+        _downloadCts = new CancellationTokenSource();
+        var ct = _downloadCts.Token;
+
+        var info = new UpdateChecker.UpdateInfo("", "", installerUrl, sha256Url, installerSize, "");
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await UpdateChecker.DownloadAndInstallAsync(
+                    info,
+                    (received, total) => Push(new
+                    {
+                        @event = "downloadProgress",
+                        bytesReceived = received,
+                        totalBytes    = total,
+                        percent       = total > 0 ? (int)(received * 100 / total) : 0
+                    }),
+                    ct).ConfigureAwait(false);
+
+                Push(new { @event = "downloadComplete" });
+            }
+            catch (OperationCanceledException)
+            {
+                Push(new { @event = "downloadCanceled" });
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("downloadUpdate falhou", ex);
+                Push(new { @event = "downloadError", message = ex.Message });
+            }
+        }, CancellationToken.None);
+
+        return IpcResponse.Ok(new { started = true });
+    }
+
+    private IpcResponse HandleCancelDownload()
+    {
+        _downloadCts?.Cancel();
+        return IpcResponse.Ok(null);
+    }
+
+    /// <summary>
+    /// Verifica updates em background e envia evento push com o resultado.
+    /// Chamado tanto pelo handler IPC quanto pelo auto-check no startup.
+    /// </summary>
+    public async Task RunUpdateCheckAsync(bool includePreReleases)
+    {
+        try
+        {
+            var info = await UpdateChecker.CheckAsync(includePreReleases).ConfigureAwait(false);
+
+            var s = UserSettings.Load();
+            s.LastUpdateCheck = DateTime.UtcNow;
+            s.Save();
+
+            if (info == null)
+            {
+                Push(new { @event = "updateNotAvailable" });
+            }
+            else
+            {
+                Push(new
+                {
+                    @event       = "updateAvailable",
+                    version      = info.Version,
+                    tagName      = info.TagName,
+                    installerUrl = info.InstallerUrl,
+                    sha256Url    = info.Sha256Url,
+                    installerSize = info.InstallerSize,
+                    releaseNotes = info.ReleaseNotes,
+                });
+                AppLogger.Info($"Update disponível: {info.TagName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"RunUpdateCheckAsync: {ex.Message}");
+            Push(new { @event = "updateCheckError", message = ex.Message });
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

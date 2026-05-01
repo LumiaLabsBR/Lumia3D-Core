@@ -95,6 +95,15 @@ internal static class Program
         thumbnailQueue.OnThumbnailReady = (objectId, path) =>
             ipc.Push(new { @event = "thumbnailReady", objectId, thumbnailPath = path });
 
+        // Auto-check de update (opt-in, throttled a 24 h)
+        if (settings.AutoCheckUpdates)
+        {
+            bool stale = !settings.LastUpdateCheck.HasValue ||
+                         (DateTime.UtcNow - settings.LastUpdateCheck.Value).TotalHours >= 24;
+            if (stale)
+                _ = ipc.RunUpdateCheckAsync(settings.IncludePreReleases);
+        }
+
         if (frontendUrl.StartsWith("http"))
             window.Load(new Uri(frontendUrl));
         else

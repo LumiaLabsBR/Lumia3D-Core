@@ -151,6 +151,9 @@ export const api = {
   regenerateThumbnail: (objectId) => send('regenerateThumbnail', { objectId }),
   saveSettings:        (settings) => send('saveSettings', { settings }),
   checkForUpdate:      () => send('checkForUpdate'),
+  downloadUpdate:      (installerUrl, sha256Url, installerSize) =>
+                         send('downloadUpdate', { installerUrl, sha256Url, installerSize }),
+  cancelDownload:      () => send('cancelDownload'),
 
   // Eventos push (C# → frontend)
   on:  (eventName, handler) => _onEvent(eventName, handler),
