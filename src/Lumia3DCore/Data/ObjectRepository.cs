@@ -99,6 +99,30 @@ public class ObjectRepository
         });
     }
 
+    /// <summary>Estatísticas agregadas da biblioteca (para a status bar).</summary>
+    public (int Count, long TotalSizeBytes) GetStats()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        int count = connection.QuerySingle<int>("SELECT COUNT(*) FROM Object3D");
+        // Soma o tamanho dos arquivos físicos (custa I/O; para >10k objetos considere
+        // adicionar coluna FileSize e popular no import — backlog v0.2.0).
+        long totalBytes = 0;
+        if (count > 0)
+        {
+            var paths = connection.Query<string>("SELECT MainFilePath FROM Object3D").ToList();
+            foreach (var rel in paths)
+            {
+                try
+                {
+                    var abs = MakeAbsolute(rel);
+                    if (File.Exists(abs)) totalBytes += new FileInfo(abs).Length;
+                }
+                catch { /* arquivo movido/inacessível — ignora */ }
+            }
+        }
+        return (count, totalBytes);
+    }
+
     public IEnumerable<Attachment> GetAttachments(int objectId)
     {
         using var connection = new SqliteConnection(_connectionString);

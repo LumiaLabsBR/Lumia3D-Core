@@ -28,7 +28,7 @@ const ModelCard = ({ model, onOpen, large, isFav, onToggleFav }) => (
     display: 'flex', flexDirection: 'column',
   }}>
     <div style={{ position: 'relative', aspectRatio: '4 / 3', overflow: 'hidden' }}>
-      <ModelThumbnail shape={model.shape} modelId={model.id} />
+      <ModelThumbnail shape={model.shape} modelId={model.id} thumbnailUrl={model.thumbnailUrl} />
       <div style={{ position: 'absolute', top: 8, left: 8 }}>
         <FormatBadge format={model.format} />
       </div>
@@ -95,7 +95,7 @@ const ModelListRow = ({ model, onOpen, isFav, onToggleFav, style }) => (
   }}>
     <FavStar active={isFav} onClick={onToggleFav} />
     <div style={{ width: 52, height: 40, borderRadius: 4, overflow: 'hidden', background: '#0f1115' }}>
-      <ModelThumbnail shape={model.shape} modelId={model.id} />
+      <ModelThumbnail shape={model.shape} modelId={model.id} thumbnailUrl={model.thumbnailUrl} />
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
       <span style={{ fontWeight: 500, color: '#E6E8EC', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{model.name}</span>

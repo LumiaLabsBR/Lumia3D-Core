@@ -113,6 +113,36 @@ export default function App() {
   // Stats agregadas (count, sizeMB) da biblioteca
   useEffect(() => { library.stats().then(setStats); }, []);
 
+  // Push events do backend C#: thumbnail pronto, import progress, etc.
+  // ipc.on retorna uma função de cleanup (unsubscribe).
+  useEffect(() => {
+    const off1 = ipc.on('thumbnailReady', () => {
+      // Re-query modelos para puxar o novo thumbnailUrl
+      library.listModels({
+        catId: filters.selectedCat,
+        tags: filters.activeTags,
+        query: filters.query,
+        sort: filters.sort,
+      }).then(setModels);
+    });
+    const off2 = ipc.on('importProgress', ({ fileName }) => setImportStage(fileName || 'importando'));
+    const off3 = ipc.on('importCounts', ({ objectsImported }) => {
+      setImporting((p) => p == null ? null : Math.min(99, p + 1));
+    });
+    const off4 = ipc.on('importComplete', () => {
+      setImporting(100);
+      library.stats().then(setStats);
+      library.listModels({
+        catId: filters.selectedCat,
+        tags: filters.activeTags,
+        query: filters.query,
+        sort: filters.sort,
+      }).then(setModels);
+      setTimeout(() => { setImporting(null); setImportStage(''); }, 600);
+    });
+    return () => { off1(); off2(); off3(); off4(); };
+  }, [filters]);
+
   // Re-query quando filtros mudam
   useEffect(() => {
     let cancelled = false;

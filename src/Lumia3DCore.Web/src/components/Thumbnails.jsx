@@ -239,7 +239,19 @@ const shapes = {
   </>),
 };
 
-export const ModelThumbnail = ({ shape, modelId, bg = '#1a1c20' }) => {
+export const ModelThumbnail = ({ shape, modelId, thumbnailUrl, bg = '#1a1c20' }) => {
+  // Backend gera PNG real via ThumbnailQueue → mostra <img>.
+  // Sem URL, cai no SVG procedural baseado em `shape`.
+  if (thumbnailUrl) {
+    return (
+      <img
+        src={thumbnailUrl}
+        alt=""
+        loading="lazy"
+        style={{ width: '100%', height: '100%', display: 'block', background: bg, objectFit: 'cover' }}
+      />
+    );
+  }
   const id = `t-${modelId}`;
   const renderShape = shapes[shape] || shapes.cube;
   return (

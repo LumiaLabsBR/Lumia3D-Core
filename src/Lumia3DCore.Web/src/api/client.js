@@ -92,6 +92,8 @@ function devMock(action, payload, data) {
       return Promise.resolve(tags);
     case 'getAttachments':
       return Promise.resolve([]);
+    case 'getStats':
+      return Promise.resolve({ count: models.length, sizeMB: 0, indexed: true });
     case 'getAppInfo':
       return Promise.resolve({
         version: '0.1.0-alpha.1-dev',
@@ -119,6 +121,7 @@ export const api = {
   getCategories:       () => send('getCategories'),
   getTags:             () => send('getTags'),
   getAttachments:      (objectId) => send('getAttachments', { objectId }),
+  getStats:            () => send('getStats'),
   getAppInfo:          () => send('getAppInfo'),
   getSettings:         () => send('getSettings'),
 

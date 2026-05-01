@@ -89,6 +89,23 @@ public class ObjectRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void GetStats_ReturnsCountAndTotalSize()
+    {
+        // Cria 2 arquivos reais e referencia em Object3D para que GetStats some os tamanhos.
+        string p1 = Path.Combine(_env.LibraryPath, "a.stl");
+        string p2 = Path.Combine(_env.LibraryPath, "b.stl");
+        File.WriteAllBytes(p1, new byte[1024]);
+        File.WriteAllBytes(p2, new byte[2048]);
+
+        var o1 = MakeObject("A"); o1.MainFilePath = p1; _env.Repository.AddObject(o1);
+        var o2 = MakeObject("B"); o2.MainFilePath = p2; _env.Repository.AddObject(o2);
+
+        var (count, totalBytes) = _env.Repository.GetStats();
+        count.Should().Be(2);
+        totalBytes.Should().Be(3072);
+    }
+
+    [Fact]
     public void ForeignKeyConstraint_RejectsInvalidObjectIdInAttachment()
     {
         // Confirma que PRAGMA foreign_keys=ON está ativo na conexão.

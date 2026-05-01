@@ -56,6 +56,7 @@ public class IpcBridge
                 "getCategories"       => HandleGetCategories(),
                 "getTags"             => HandleGetTags(),
                 "getAttachments"      => HandleGetAttachments(request),
+                "getStats"            => HandleGetStats(),
 
                 "importFile"          => HandleImportFile(request),
                 "importFolder"        => HandleImportFolder(request),
@@ -130,6 +131,17 @@ public class IpcBridge
 
     private IpcResponse HandleGetCategories()   => IpcResponse.Ok(_repository.GetAllCategories());
     private IpcResponse HandleGetTags()         => IpcResponse.Ok(_repository.GetAllTags());
+
+    private IpcResponse HandleGetStats()
+    {
+        var (count, totalBytes) = _repository.GetStats();
+        return IpcResponse.Ok(new
+        {
+            count,
+            sizeMB = totalBytes / (1024.0 * 1024.0),
+            indexed = true
+        });
+    }
 
     private IpcResponse HandleGetAttachments(IpcRequest req)
     {
