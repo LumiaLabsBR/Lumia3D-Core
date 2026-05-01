@@ -65,8 +65,42 @@ const CategoryTree = ({ categories, selectedId, onSelect }) => {
   );
 };
 
-export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag }) => {
+const CollectionRow = ({ icon, label, count, color, active, onClick, onDelete }) => (
+  <div onClick={onClick} className="cat-row" style={{
+    display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, paddingRight: 8,
+    height: 28, borderRadius: 4, cursor: 'pointer',
+    background: active ? 'rgba(255, 122, 26, 0.13)' : 'transparent',
+    color: active ? '#FFA85F' : '#C7CDD5', fontSize: 12.5,
+  }}>
+    {icon === 'star' ? (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill={active ? '#FFA85F' : 'none'} stroke={active ? '#FFA85F' : color || '#7A8290'} strokeWidth="1.6" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+      </svg>
+    ) : (
+      <span style={{ width: 9, height: 9, borderRadius: 2, background: color || '#7A8290', flexShrink: 0 }} />
+    )}
+    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+    <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C' }}>{count}</span>
+    {onDelete && (
+      <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Excluir coleção" style={{
+        width: 16, height: 16, border: 'none', background: 'transparent', color: '#5A626C',
+        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+      }}>
+        <Icon name="close" size={10} strokeWidth={2} />
+      </button>
+    )}
+  </div>
+);
+
+export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag, collections, favorites, FAV_ID, selectedCollection, onSelectCollection, onCreateCollection, onDeleteCollection }) => {
   const { categories, tags } = LUMIA_DATA;
+  const [creating, setCreating] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const submitDraft = () => {
+    const n = draftName.trim();
+    if (n) onCreateCollection(n);
+    setDraftName(''); setCreating(false);
+  };
   return (
     <aside style={{
       width: 248, flexShrink: 0, background: '#16181c',
@@ -93,6 +127,46 @@ export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag }) =
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 12px' }}>
         <SectionLabel>Categorias</SectionLabel>
         <CategoryTree categories={categories} selectedId={selectedCat} onSelect={onSelectCat} />
+        <SectionLabel style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
+          <span>Coleções</span>
+          <button onClick={() => setCreating(true)} title="Nova coleção" style={{
+            width: 16, height: 16, border: 'none', background: 'transparent', color: '#7A8290',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+          }}>
+            <Icon name="plus" size={11} strokeWidth={2.2} />
+          </button>
+        </SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <CollectionRow
+            icon="star" label="Favoritos" count={favorites.length}
+            active={selectedCollection === FAV_ID}
+            onClick={() => onSelectCollection(selectedCollection === FAV_ID ? null : FAV_ID)} />
+          {collections.map((c) => (
+            <CollectionRow key={c.id} label={c.name} count={c.modelIds.length} color={c.color}
+              active={selectedCollection === c.id}
+              onClick={() => onSelectCollection(selectedCollection === c.id ? null : c.id)}
+              onDelete={() => onDeleteCollection(c.id)} />
+          ))}
+          {creating && (
+            <div style={{ padding: '4px 8px' }}>
+              <input
+                autoFocus
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onBlur={submitDraft}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitDraft();
+                  if (e.key === 'Escape') { setDraftName(''); setCreating(false); }
+                }}
+                placeholder="Nome da coleção…"
+                style={{
+                  width: '100%', height: 26, padding: '0 8px',
+                  background: '#0f1115', border: '1px solid rgba(255, 122, 26, 0.4)',
+                  borderRadius: 4, color: '#E6E8EC', fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                }} />
+            </div>
+          )}
+        </div>
         <SectionLabel style={{ marginTop: 18 }}>Etiquetas</SectionLabel>
         <div style={{ padding: '4px 6px', display: 'flex', flexWrap: 'wrap', gap: 5 }}>
           {tags.map(t => (
