@@ -1,12 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { LUMIA_DATA } from '../data.js';
 import { Icon, FormatBadge, Tag } from './Icons.jsx';
 import { SectionLabel } from './Sidebar.jsx';
+import { buildProcedural, matClay } from '../three/procedural.js';
+import { loadModel } from '../three/loaders.js';
 
-const ThreeViewer = ({ shape }) => {
+const ThreeViewer = ({ model }) => {
   const ref = useRef(null);
   const stateRef = useRef({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -49,97 +52,29 @@ const ThreeViewer = ({ shape }) => {
     grid.position.y = -1;
     scene.add(grid);
 
-    const matClay = new THREE.MeshStandardMaterial({ color: 0xc4c8ce, roughness: 0.55, metalness: 0.1 });
-    const matMetal = new THREE.MeshStandardMaterial({ color: 0xb0b6be, roughness: 0.25, metalness: 0.85 });
-
-    let mesh;
-    const group = new THREE.Group();
-
-    const buildShape = () => {
-      switch (shape) {
-        case 'gear': {
-          const teeth = 16;
-          for (let i = 0; i < teeth; i++) {
-            const t = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.45, 0.5), matMetal);
-            const a = (i / teeth) * Math.PI * 2;
-            t.position.set(Math.cos(a) * 1.0, 0, Math.sin(a) * 1.0);
-            t.rotation.y = -a;
-            t.castShadow = true;
-            group.add(t);
-          }
-          const body = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.45, 48), matMetal);
-          body.castShadow = true; group.add(body);
-          const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 24), new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 1 }));
-          group.add(hole);
-          return group;
-        }
-        case 'torus':
-          mesh = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.32, 24, 60), matMetal);
-          mesh.rotation.x = Math.PI / 2;
-          break;
-        case 'cube':
-          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), matClay);
-          break;
-        case 'ring': {
-          const r = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.16, 20, 60), matMetal);
-          r.rotation.x = Math.PI / 2;
-          r.castShadow = true; group.add(r);
-          const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), new THREE.MeshStandardMaterial({ color: 0xb8e0ff, roughness: 0.05, metalness: 0.2 }));
-          gem.position.y = 0.25;
-          gem.castShadow = true; group.add(gem);
-          return group;
-        }
-        case 'vase': {
-          const points = [];
-          for (let i = 0; i <= 12; i++) {
-            const t = i / 12;
-            const r = 0.3 + Math.sin(t * Math.PI) * 0.55 + (1 - t) * 0.1;
-            points.push(new THREE.Vector2(r, t * 1.8 - 0.9));
-          }
-          mesh = new THREE.Mesh(new THREE.LatheGeometry(points, 48), matClay);
-          break;
-        }
-        case 'skull':
-        case 'bust':
-        case 'figure': {
-          const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 32, 24), matClay);
-          head.position.y = 0.35;
-          head.castShadow = true; group.add(head);
-          const body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.65, 1.0, 24), matClay);
-          body.position.y = -0.5;
-          body.castShadow = true; group.add(body);
-          return group;
-        }
-        case 'box':
-          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.2), matClay);
-          break;
-        case 'screw': {
-          const head = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.18, 24), matMetal);
-          head.position.y = 0.85;
-          head.castShadow = true; group.add(head);
-          const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.5, 16), matMetal);
-          shaft.castShadow = true; group.add(shaft);
-          return group;
-        }
-        case 'hex': {
-          const positions = [[0, 0], [1.6, 0], [-1.6, 0], [0.8, 1.1], [-0.8, 1.1], [0.8, -1.1], [-0.8, -1.1]];
-          positions.forEach(([x, z]) => {
-            const hh = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.4, 6), matClay);
-            hh.position.set(x, 0, z);
-            hh.castShadow = true; group.add(hh);
-          });
-          return group;
-        }
-        default:
-          mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.95, 1), matClay);
-      }
-      mesh.castShadow = true;
-      group.add(mesh);
-      return group;
-    };
-
-    const obj = buildShape();
+    // Holder swapped in/out depending on whether a real model URL loads.
+    let obj = buildProcedural(model.shape);
     scene.add(obj);
+
+    // If the model has a real URL, try loading it asynchronously.
+    // On success, swap out the procedural placeholder.
+    let cancelled = false;
+    if (model.url) {
+      setLoading(true);
+      loadModel({ url: model.url, format: model.format }, matClay)
+        .then((loaded) => {
+          if (cancelled || !loaded) return;
+          scene.remove(obj);
+          obj = loaded;
+          scene.add(obj);
+        })
+        .catch((err) => {
+          console.warn('[Lumia3D] failed to load', model.url, err);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
 
     let raf;
     let auto = true;
@@ -161,13 +96,18 @@ const ThreeViewer = ({ shape }) => {
       stateRef.current.lastY = e.clientY;
     };
     const onPointerUp = () => { stateRef.current.dragging = false; };
+    const onWheel = (e) => {
+      e.preventDefault();
+      camera.position.multiplyScalar(1 + e.deltaY * 0.001);
+    };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
 
     const animate = () => {
       raf = requestAnimationFrame(animate);
-      if (auto) obj.rotation.y = (performance.now() - start) * 0.0005;
+      if (auto && obj) obj.rotation.y = (performance.now() - start) * 0.0005;
       renderer.render(scene, camera);
     };
     animate();
@@ -182,17 +122,34 @@ const ThreeViewer = ({ shape }) => {
     ro.observe(container);
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       renderer.dispose();
       container.innerHTML = '';
     };
-  }, [shape]);
+  }, [model.id, model.shape, model.url, model.format]);
 
-  return <div ref={ref} style={{ width: '100%', height: '100%', cursor: 'grab' }} />;
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%', cursor: 'grab', position: 'relative' }}>
+      {loading && (
+        <div style={{
+          position: 'absolute', top: 12, right: 12, zIndex: 2,
+          padding: '4px 8px', borderRadius: 3,
+          background: 'rgba(0,0,0,0.55)', color: '#FFA85F',
+          fontFamily: '"JetBrains Mono", monospace', fontSize: 10,
+          letterSpacing: 0.6, textTransform: 'uppercase',
+          border: '1px solid rgba(255, 122, 26, 0.3)',
+        }}>
+          carregando malha…
+        </div>
+      )}
+    </div>
+  );
 };
 
 const KV = ({ k, v, mono }) => (
@@ -228,9 +185,10 @@ const footerBtn = {
   borderRadius: 4, color: '#C7CDD5', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
 };
 
-export const ModelDetail = ({ model, onClose }) => {
+export const ModelDetail = ({ model, onClose, isFavorite, onToggleFavorite, collections = [], onAddToCollection, onRemoveFromCollection }) => {
   if (!model) return null;
   const tagColors = Object.fromEntries(LUMIA_DATA.tags.map(t => [t.name, t.color]));
+  const inCollections = collections.filter((c) => c.modelIds.includes(model.id));
   const cat = (() => {
     for (const c of LUMIA_DATA.categories) {
       if (c.id === model.cat) return c.name;
@@ -255,7 +213,7 @@ export const ModelDetail = ({ model, onClose }) => {
       }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0a0b0e', position: 'relative' }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <ThreeViewer shape={model.shape} />
+            <ThreeViewer model={model} />
             <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6 }}>
               <FormatBadge format={model.format} />
               <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, padding: '2px 7px', borderRadius: 3, background: 'rgba(0,0,0,0.5)', color: '#9097A0', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -287,6 +245,16 @@ export const ModelDetail = ({ model, onClose }) => {
                 <h2 style={{ fontSize: 16, fontWeight: 600, color: '#E6E8EC', margin: 0, lineHeight: 1.3 }}>{model.name}</h2>
                 <div style={{ marginTop: 6, fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: '#7A8290' }}>{model.file}</div>
               </div>
+              <button onClick={onToggleFavorite} title={isFavorite ? 'Remover dos favoritos' : 'Favoritar'} style={{
+                width: 28, height: 28, borderRadius: 4, border: 'none',
+                background: isFavorite ? 'rgba(255, 168, 95, 0.18)' : 'rgba(255,255,255,0.04)',
+                color: isFavorite ? '#FFA85F' : '#9097A0', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.7} strokeLinejoin="round">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                </svg>
+              </button>
               <button onClick={onClose} style={{
                 width: 28, height: 28, borderRadius: 4, border: 'none',
                 background: 'rgba(255,255,255,0.04)', color: '#9097A0', cursor: 'pointer',
@@ -310,6 +278,31 @@ export const ModelDetail = ({ model, onClose }) => {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {model.tags.map(t => <Tag key={t} name={t} color={tagColors[t]} />)}
               <button style={tagAddBtn}><Icon name="plus" size={10} strokeWidth={2.4} /> adicionar</button>
+            </div>
+            <SectionLabel style={{ padding: '18px 0 10px' }}>Coleções</SectionLabel>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {collections.map((c) => {
+                const inIt = c.modelIds.includes(model.id);
+                return (
+                  <button key={c.id}
+                    onClick={() => inIt ? onRemoveFromCollection(c.id) : onAddToCollection(c.id)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '4px 9px', borderRadius: 4,
+                      border: inIt ? '1px solid rgba(255, 122, 26, 0.5)' : '1px solid rgba(255,255,255,0.06)',
+                      background: inIt ? 'rgba(255, 122, 26, 0.12)' : 'rgba(255,255,255,0.025)',
+                      color: inIt ? '#FFA85F' : '#B4BAC2',
+                      fontSize: 11.5, fontFamily: 'inherit', cursor: 'pointer',
+                    }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 2, background: c.color || '#9097A0' }} />
+                    {c.name}
+                    {inIt && <Icon name="close" size={9} strokeWidth={2.2} />}
+                  </button>
+                );
+              })}
+              {collections.length === 0 && (
+                <div style={{ fontSize: 11.5, color: '#5A626C' }}>Crie coleções na barra lateral.</div>
+              )}
             </div>
             <SectionLabel style={{ padding: '18px 0 10px' }}>Anexos · {model.attachments}</SectionLabel>
             {model.attachments > 0 ? (

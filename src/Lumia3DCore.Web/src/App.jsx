@@ -79,7 +79,8 @@ export default function App() {
   const [active, setActive] = useState(null);
   const [importing, setImporting] = useState(null);
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [tweaks, setTweaks] = useState({ theme: 'dark', density: 'comfortable' });
+  const DEFAULT_TWEAKS = { theme: 'dark', density: 'comfortable', defaultView: 'gallery' };
+  const [tweaks, setTweaks] = useState(DEFAULT_TWEAKS);
   const [appInfo, setAppInfo] = useState(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -172,7 +173,7 @@ export default function App() {
       />
       {active && <ModelDetail model={active} onClose={() => setActive(null)} />}
       {importing != null && <Toast progress={importing} />}
-      {tweaksOpen && <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} onClose={() => setTweaksOpen(false)} />}
+      {tweaksOpen && <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} onReset={() => setTweaks(DEFAULT_TWEAKS)} onClose={() => setTweaksOpen(false)} />}
       {aboutOpen && <AboutModal appInfo={appInfo} onClose={() => setAboutOpen(false)} />}
       <LoadingSplash visible={loading} />
     </div>
