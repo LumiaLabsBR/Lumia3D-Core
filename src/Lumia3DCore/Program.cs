@@ -31,6 +31,10 @@ internal static class Program
     {
         // ── Paths ────────────────────────────────────────────────────────
         string appData = UserSettings.GetAppDataDirectory();
+        string logsDir = Path.Combine(appData, "logs");
+        AppLogger.Initialize(logsDir);
+        AppLogger.Info($"{AppName} {AppVersion} iniciando");
+
         string libraryPath = ResolveLibraryPath(appData);
         string dbPath = Path.Combine(appData, "library.db");
 

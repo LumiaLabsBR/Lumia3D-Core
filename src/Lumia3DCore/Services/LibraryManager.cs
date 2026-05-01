@@ -38,32 +38,55 @@ public class LibraryManager
         if (!File.Exists(sourceFilePath)) return null;
 
         var fileInfo = new FileInfo(sourceFilePath);
-        string hash = CalculateHash(sourceFilePath);
+        string hash;
+        try { hash = CalculateHash(sourceFilePath); }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Erro ao calcular hash de '{fileInfo.Name}'", ex);
+            return null;
+        }
 
         var existing = _repository.GetObjectByHash(hash);
         if (existing != null) return existing;
 
         string destinationFileName = $"{hash}{fileInfo.Extension}";
         string destinationFilePath = Path.Combine(_libraryPath, destinationFileName);
+        string thumbnailPath = string.Empty;
+        bool newFileCopied = false;
 
-        if (!File.Exists(destinationFilePath))
-            File.Copy(sourceFilePath, destinationFilePath);
-
-        string thumbnailPath = ThumbnailGenerator.GenerateThumbnail(destinationFilePath, _thumbnailsPath);
-
-        var newObject = new Object3D
+        try
         {
-            Name = SanitizeName(Path.GetFileNameWithoutExtension(fileInfo.Name)),
-            MainFilePath = destinationFilePath,
-            FileType = fileInfo.Extension.ToLower(),
-            ThumbnailPath = thumbnailPath,
-            Hash = hash,
-            CategoryId = categoryId,
-            CreatedAt = DateTime.UtcNow
-        };
+            if (!File.Exists(destinationFilePath))
+            {
+                File.Copy(sourceFilePath, destinationFilePath);
+                newFileCopied = true;
+            }
 
-        _repository.AddObject(newObject);
-        return newObject;
+            thumbnailPath = ThumbnailGenerator.GenerateThumbnail(destinationFilePath, _thumbnailsPath);
+
+            var newObject = new Object3D
+            {
+                Name = SanitizeName(Path.GetFileNameWithoutExtension(fileInfo.Name)),
+                MainFilePath = destinationFilePath,
+                FileType = fileInfo.Extension.ToLower(),
+                ThumbnailPath = thumbnailPath,
+                Hash = hash,
+                CategoryId = categoryId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _repository.AddObject(newObject);
+            AppLogger.Debug($"Importado: '{newObject.Name}' ({newObject.FileType})");
+            return newObject;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"Falha ao importar '{fileInfo.Name}'", ex);
+            // Rollback: remove arquivos criados neste import para não deixar órfãos
+            if (newFileCopied) try { File.Delete(destinationFilePath); } catch { }
+            if (!string.IsNullOrEmpty(thumbnailPath)) try { File.Delete(thumbnailPath); } catch { }
+            return null;
+        }
     }
 
     /// <summary>
@@ -192,6 +215,7 @@ public class LibraryManager
 
     public void DeleteObject(Object3D obj)
     {
+        AppLogger.Info($"Deletando objeto Id={obj.Id} '{obj.Name}'");
         var attachments = _repository.GetAttachments(obj.Id).ToList();
         _repository.DeleteObject(obj.Id);
 

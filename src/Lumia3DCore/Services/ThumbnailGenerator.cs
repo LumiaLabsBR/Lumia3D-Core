@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Lumia3DCore.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -56,13 +57,16 @@ public static class ThumbnailGenerator
 
             return outPath;
         }
-        catch
+        catch (Exception ex)
         {
+            AppLogger.Warn($"Thumbnail falhou para '{IOPath.GetFileName(modelFilePath)}': {ex.Message}");
             return string.Empty;
         }
     }
 
     // ── 3MF — extrai thumbnail embutido no ZIP ────────────────────────────
+    private const long MaxZipEntryBytes = 50 * 1024 * 1024; // 50 MB — proteção zip bomb
+
     private static bool Extract3mfThumbnail(string filePath, string outPath)
     {
         try
@@ -86,20 +90,31 @@ public static class ThumbnailGenerator
             foreach (var candidate in candidateOrder)
             {
                 entry = archive.Entries.FirstOrDefault(e =>
+                    IsZipEntrySafe(e.FullName) &&
                     string.Equals(e.FullName, candidate, StringComparison.OrdinalIgnoreCase));
                 if (entry != null) break;
             }
 
-            // Fallback: maior PNG no arquivo
+            // Fallback: maior PNG seguro no arquivo
             entry ??= archive.Entries
-                .Where(e => e.FullName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                .Where(e => IsZipEntrySafe(e.FullName) &&
+                            e.FullName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                            e.Length <= MaxZipEntryBytes)
                 .MaxBy(e => e.Length);
 
             if (entry == null) return false;
 
+            // Rejeitar entradas descomprimidas maiores que o limite (zip bomb)
+            if (entry.Length > MaxZipEntryBytes)
+            {
+                AppLogger.Warn($"Entrada ZIP muito grande ({entry.Length} bytes) em '{IOPath.GetFileName(filePath)}' — ignorada.");
+                return false;
+            }
+
             using var inputStream = entry.Open();
-            using var memStream = new MemoryStream();
-            inputStream.CopyTo(memStream);
+            using var memStream = new MemoryStream((int)Math.Min(entry.Length, MaxZipEntryBytes));
+            // Lê com limite para evitar zip bombs com Length falsificado
+            CopyToWithLimit(inputStream, memStream, MaxZipEntryBytes);
             memStream.Position = 0;
 
             using var img = Image.Load(memStream);
@@ -113,6 +128,31 @@ public static class ThumbnailGenerator
             return true;
         }
         catch { return false; }
+    }
+
+    /// <summary>Copia stream com limite de bytes; lança <see cref="InvalidDataException"/> se exceder.</summary>
+    private static void CopyToWithLimit(Stream source, Stream dest, long limit)
+    {
+        byte[] buf = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = source.Read(buf, 0, buf.Length)) > 0)
+        {
+            total += read;
+            if (total > limit)
+                throw new InvalidDataException($"Entrada ZIP excede {limit / 1024 / 1024} MB — possível zip bomb.");
+            dest.Write(buf, 0, read);
+        }
+    }
+
+    /// <summary>Valida que o path de uma entrada ZIP não contém traversal nem path absoluto.</summary>
+    private static bool IsZipEntrySafe(string entryFullName)
+    {
+        if (string.IsNullOrEmpty(entryFullName)) return false;
+        if (IOPath.IsPathRooted(entryFullName)) return false;
+        // Normaliza separadores e verifica cada segmento
+        var parts = entryFullName.Replace('\\', '/').Split('/');
+        return parts.All(p => p != ".." && p != "." && !string.IsNullOrEmpty(p));
     }
 
     // ── STL — parser + projeção isométrica ───────────────────────────────
@@ -434,6 +474,18 @@ public static class ThumbnailGenerator
         stream.Position = 80;
         using var br = new BinaryReader(stream);
         uint count = br.ReadUInt32();
+
+        // Proteção contra overflow: count adulterado pode causar alocação massiva.
+        // Cada triângulo binário ocupa exatamente 50 bytes; o cabeçalho usa 84 bytes.
+        const uint MaxTriangles = 5_000_000;
+        long fileLength = stream.Length;
+        if (count > MaxTriangles || (long)count * 50 > fileLength - 84)
+        {
+            AppLogger.Warn($"STL binário: count={count} inválido para fileLength={fileLength} — fallback.");
+            return;
+        }
+
+        result.Capacity = (int)count;
         for (uint i = 0; i < count; i++)
         {
             var normal = new Vec3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
