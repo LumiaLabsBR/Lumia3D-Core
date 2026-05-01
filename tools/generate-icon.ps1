@@ -23,9 +23,9 @@ function Make-Bitmap([int]$size) {
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $g.Clear([System.Drawing.Color]::Transparent)
 
-    # Fundo arredondado escuro
-    $bgBrush = New-Object System.Drawing.SolidBrush($bgColor)
-    $rad = [Math]::Max(2, [int]($size * 0.18))
+    # Fundo arredondado LARANJA cheio (mais reconhecivel em sizes pequenos da taskbar)
+    $bgBrush = New-Object System.Drawing.SolidBrush($accentColor)
+    $rad = [Math]::Max(2, [int]($size * 0.20))
     $rect = New-Object System.Drawing.Rectangle(0, 0, $size, $size)
     if ($size -ge 32) {
         $path = New-Object System.Drawing.Drawing2D.GraphicsPath
@@ -42,7 +42,7 @@ function Make-Bitmap([int]$size) {
     }
 
     # Coords do cubo isometrico (viewBox 40x40 → escala pra $size com padding)
-    $pad = $size * 0.18
+    $pad = $size * 0.20
     $inner = $size - 2 * $pad
     $scale = $inner / 40.0
     function P([double]$x, [double]$y) {
@@ -51,49 +51,37 @@ function Make-Bitmap([int]$size) {
             [single]($pad + $y * $scale))
     }
 
+    # Cubo BRANCO em fundo laranja (alto contraste em qualquer size)
+    $whiteFull = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
+    $whiteMed  = [System.Drawing.Color]::FromArgb(180, 255, 255, 255)
+    $whiteLow  = [System.Drawing.Color]::FromArgb(110, 255, 255, 255)
+
     # Face right (mais clara): M20 8 L31.6 14.4 L31.6 25.6 L20 32 L20 19.8 Z
     $faceRight = @( (P 20 8), (P 31.6 14.4), (P 31.6 25.6), (P 20 32), (P 20 19.8) )
-    $rightBrush = New-Object System.Drawing.SolidBrush($lightColor)
-    $g.FillPolygon($rightBrush, $faceRight)
+    $b1 = New-Object System.Drawing.SolidBrush($whiteFull)
+    $g.FillPolygon($b1, $faceRight)
 
     # Face top: M20 8 L20 19.8 L8.4 14.4 Z
     $faceTop = @( (P 20 8), (P 20 19.8), (P 8.4 14.4) )
-    $topBrush = New-Object System.Drawing.SolidBrush($mediumColor)
-    $g.FillPolygon($topBrush, $faceTop)
+    $b2 = New-Object System.Drawing.SolidBrush($whiteMed)
+    $g.FillPolygon($b2, $faceTop)
 
     # Face left: M8.4 14.4 L20 19.8 L20 32 L8.4 25.6 Z
     $faceLeft = @( (P 8.4 14.4), (P 20 19.8), (P 20 32), (P 8.4 25.6) )
-    $leftBrush = New-Object System.Drawing.SolidBrush($darkColor)
-    $g.FillPolygon($leftBrush, $faceLeft)
+    $b3 = New-Object System.Drawing.SolidBrush($whiteLow)
+    $g.FillPolygon($b3, $faceLeft)
 
-    # Centro: anel + dot accent (so em tamanhos grandes)
+    # Em sizes grandes, contorno fino para definir as arestas do cubo
     if ($size -ge 32) {
-        $centerX = $pad + 20 * $scale
-        $centerY = $pad + 19.8 * $scale
-        $ringR   = 3.6 * $scale
-        $dotR    = 1.6 * $scale
-
-        $ringPen = New-Object System.Drawing.Pen($accentRingClr, [single](0.8 * $scale))
-        $g.DrawEllipse($ringPen, [single]($centerX - $ringR), [single]($centerY - $ringR),
-                                  [single]($ringR * 2), [single]($ringR * 2))
-        $ringPen.Dispose()
-
-        $dotBrush = New-Object System.Drawing.SolidBrush($accentColor)
-        $g.FillEllipse($dotBrush, [single]($centerX - $dotR), [single]($centerY - $dotR),
-                                   [single]($dotR * 2), [single]($dotR * 2))
-        $dotBrush.Dispose()
-    } else {
-        # Em 16px: so o dot, sem anel
-        $dotR = $size * 0.13
-        $cx = $size / 2
-        $cy = $size * 0.50
-        $dotBrush = New-Object System.Drawing.SolidBrush($accentColor)
-        $g.FillEllipse($dotBrush, [single]($cx - $dotR), [single]($cy - $dotR),
-                                   [single]($dotR * 2), [single]($dotR * 2))
-        $dotBrush.Dispose()
+        $edgeColor = [System.Drawing.Color]::FromArgb(120, 30, 15, 5)
+        $edgePen = New-Object System.Drawing.Pen($edgeColor, [single](0.7 * $scale))
+        $g.DrawPolygon($edgePen, $faceRight)
+        $g.DrawPolygon($edgePen, $faceTop)
+        $g.DrawPolygon($edgePen, $faceLeft)
+        $edgePen.Dispose()
     }
 
-    $bgBrush.Dispose(); $rightBrush.Dispose(); $topBrush.Dispose(); $leftBrush.Dispose()
+    $bgBrush.Dispose(); $b1.Dispose(); $b2.Dispose(); $b3.Dispose()
     $g.Dispose()
     return $bmp
 }

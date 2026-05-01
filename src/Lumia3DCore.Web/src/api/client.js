@@ -158,6 +158,12 @@ export const api = {
                          send('downloadUpdate', { installerUrl, sha256Url, installerSize }),
   cancelDownload:      () => send('cancelDownload'),
 
+  // Window controls (custom title bar)
+  windowMinimize:  () => send('windowMinimize'),
+  windowMaximize:  () => send('windowMaximize'),
+  windowClose:     () => send('windowClose'),
+  openExternal:    (url) => send('openExternal', { url }),
+
   // Eventos push (C# → frontend)
   on:  (eventName, handler) => _onEvent(eventName, handler),
 };

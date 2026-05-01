@@ -25,6 +25,7 @@ public class IpcBridge
     };
 
     private Action<string>? _push;
+    private Action<string>? _windowAction;
     private CancellationTokenSource? _importCts;
     private CancellationTokenSource? _downloadCts;
 
@@ -39,6 +40,9 @@ public class IpcBridge
 
     /// <summary>Envia um evento push ao frontend sem request correspondente.</summary>
     public void Push(object payload) => _push?.Invoke(JsonSerializer.Serialize(payload, _json));
+
+    /// <summary>Registra um delegate para controles de janela (minimize/maximize/close).</summary>
+    public void SetWindowAction(Action<string> action) => _windowAction = action;
 
     public string Handle(string messageJson)
     {
@@ -86,6 +90,12 @@ public class IpcBridge
                 "checkForUpdate"      => HandleCheckForUpdate(),
                 "downloadUpdate"      => HandleDownloadUpdate(request),
                 "cancelDownload"      => HandleCancelDownload(),
+
+                "windowMinimize"      => HandleWindowAction("minimize"),
+                "windowMaximize"      => HandleWindowAction("maximize"),
+                "windowClose"         => HandleWindowAction("close"),
+
+                "openExternal"        => HandleOpenExternal(request),
 
                 _ => IpcResponse.Fail($"Unknown action: {request.Action}")
             };
@@ -518,6 +528,40 @@ public class IpcBridge
     {
         _downloadCts?.Cancel();
         return IpcResponse.Ok(null);
+    }
+
+    // ── Window controls ──────────────────────────────────────────────────────
+
+    private IpcResponse HandleWindowAction(string action)
+    {
+        _windowAction?.Invoke(action);
+        return IpcResponse.Ok(null);
+    }
+
+    private IpcResponse HandleOpenExternal(IpcRequest req)
+    {
+        if (!req.Payload.TryGetProperty("url", out var uProp))
+            return IpcResponse.Fail("url required");
+
+        string url = uProp.GetString() ?? "";
+        // Aceita só http(s) — sem file:// pra evitar abuso
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("http://",  StringComparison.OrdinalIgnoreCase))
+            return IpcResponse.Fail("URL inválida (apenas http/https)");
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url, UseShellExecute = true
+            });
+            return IpcResponse.Ok(null);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"openExternal falhou: {ex.Message}");
+            return IpcResponse.Fail(ex.Message);
+        }
     }
 
     /// <summary>

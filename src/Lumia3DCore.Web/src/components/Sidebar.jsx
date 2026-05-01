@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { LUMIA_DATA } from '../data.js';
 import { Icon, Tag } from './Icons.jsx';
 import { Lumia3DLogo, LumiaLabsSignature } from './Logo.jsx';
 
@@ -12,7 +11,7 @@ const SectionLabel = ({ children, style }) => (
   }}>{children}</div>
 );
 
-const CategoryTree = ({ categories, selectedId, onSelect }) => {
+const CategoryTree = ({ categories, selectedId, onSelect, totalCount }) => {
   const [expanded, setExpanded] = useState(new Set(['mech', 'arch']));
   const toggle = (id) => {
     const next = new Set(expanded);
@@ -58,7 +57,7 @@ const CategoryTree = ({ categories, selectedId, onSelect }) => {
       }}>
         <Icon name="cube" size={13} stroke={selectedId == null ? '#FFA85F' : '#7A8290'} strokeWidth={1.5} />
         <span style={{ flex: 1 }}>Toda a biblioteca</span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C' }}>274</span>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C' }}>{totalCount ?? 0}</span>
       </div>
       {categories.map(c => renderNode(c))}
     </div>
@@ -92,8 +91,13 @@ const CollectionRow = ({ icon, label, count, color, active, onClick, onDelete })
   </div>
 );
 
-export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag, collections, favorites, FAV_ID, selectedCollection, onSelectCollection, onCreateCollection, onDeleteCollection }) => {
-  const { categories, tags } = LUMIA_DATA;
+export const Sidebar = ({
+  categories = [], tags = [], stats = { count: 0, sizeMB: 0, indexed: false },
+  selectedCat, onSelectCat, activeTags, onToggleTag,
+  collections, favorites, FAV_ID, selectedCollection, onSelectCollection,
+  onCreateCollection, onDeleteCollection,
+  onImport,
+}) => {
   const [creating, setCreating] = useState(false);
   const [draftName, setDraftName] = useState('');
   const submitDraft = () => {
@@ -112,7 +116,7 @@ export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag, col
         <div style={{ marginTop: 10, paddingLeft: 2 }}><LumiaLabsSignature /></div>
       </div>
       <div style={{ padding: '10px 12px 6px' }}>
-        <button className="primary-btn" style={{
+        <button onClick={onImport} className="primary-btn" style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           padding: '8px 12px',
           background: 'linear-gradient(180deg, #FF8A2E 0%, #E66A0F 100%)',
@@ -126,7 +130,7 @@ export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag, col
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 12px' }}>
         <SectionLabel>Categorias</SectionLabel>
-        <CategoryTree categories={categories} selectedId={selectedCat} onSelect={onSelectCat} />
+        <CategoryTree categories={categories} selectedId={selectedCat} onSelect={onSelectCat} totalCount={stats.count} />
         <SectionLabel style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
           <span>Coleções</span>
           <button onClick={() => setCreating(true)} title="Nova coleção" style={{
@@ -180,8 +184,8 @@ export const Sidebar = ({ selectedCat, onSelectCat, activeTags, onToggleTag, col
         fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C',
         display: 'flex', justifyContent: 'space-between',
       }}>
-        <span>274 obj · 1.84 GB</span>
-        <span style={{ color: '#5BD68D' }}>● indexado</span>
+        <span>{stats.count} obj · {stats.sizeMB >= 1024 ? (stats.sizeMB / 1024).toFixed(2) + ' GB' : stats.sizeMB.toFixed(1) + ' MB'}</span>
+        {stats.indexed && <span style={{ color: '#5BD68D' }}>● indexado</span>}
       </div>
     </aside>
   );

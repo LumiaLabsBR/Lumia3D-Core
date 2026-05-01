@@ -98,6 +98,21 @@ internal static class Program
         thumbnailQueue.OnThumbnailReady = (objectId, path) =>
             ipc.Push(new { @event = "thumbnailReady", objectId, thumbnailPath = path });
 
+        // Controles de janela disparados pelo frontend (custom title bar)
+        ipc.SetWindowAction(action =>
+        {
+            try
+            {
+                switch (action)
+                {
+                    case "minimize": window.SetMinimized(true); break;
+                    case "maximize": window.SetMaximized(!window.Maximized); break;
+                    case "close":    window.Close(); break;
+                }
+            }
+            catch (Exception ex) { AppLogger.Warn($"WindowAction '{action}' falhou: {ex.Message}"); }
+        });
+
         // Auto-check de update (opt-in, throttled a 24 h)
         if (settings.AutoCheckUpdates)
         {
