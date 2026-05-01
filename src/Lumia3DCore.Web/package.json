@@ -1,0 +1,21 @@
+{
+  "name": "lumia3d-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lumia3D Core — biblioteca de modelos 3D (frontend React + Vite)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.10"
+  }
+}

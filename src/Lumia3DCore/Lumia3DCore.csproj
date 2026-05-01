@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AssemblyName>Lumia3DCore</AssemblyName>
+    <RootNamespace>Lumia3DCore</RootNamespace>
+
+    <!-- Versão — bump por fase até 1.0.0 -->
+    <Version>0.1.0-alpha.1</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+
+    <!-- Metadados -->
+    <Product>Lumia3D Core</Product>
+    <Company>LumiaLabs</Company>
+    <Copyright>Copyright © 2025 LumiaLabs</Copyright>
+    <Description>Sua biblioteca 3D, organizada e ao seu alcance.</Description>
+
+    <!-- Self-contained: usuário não precisa instalar .NET -->
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- Ícone e manifesto Windows -->
+    <!-- <ApplicationIcon>Assets\icon.ico</ApplicationIcon> -->
+  </PropertyGroup>
+
+  <!-- Em desenvolvimento não publicamos single-file; apenas no Release -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Shell WebView2 — Photino.NET -->
+    <PackageReference Include="Photino.NET" Version="2.5.2" />
+
+    <!-- ORM leve para SQLite -->
+    <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+
+    <!-- Geração de thumbnails -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
+  </ItemGroup>
+
+  <!-- wwwroot (build do frontend React) copiado para output -->
+  <ItemGroup>
+    <Content Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

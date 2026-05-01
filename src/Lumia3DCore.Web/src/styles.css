@@ -1,0 +1,183 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+body {
+  background: #0a0b0e;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #e6e8ec;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Hover states */
+.model-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 122, 26, 0.3) !important;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 122, 26, 0.2);
+}
+.list-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.cat-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.tag-pill:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #e6e8ec !important;
+}
+.hdr-btn:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #e6e8ec !important;
+}
+.primary-btn:hover {
+  filter: brightness(1.08);
+}
+
+/* Window control hovers */
+.app > div:first-child button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6e8ec;
+}
+.app > div:first-child button:last-child:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes lumiaCursor {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Light theme */
+.theme-light {
+  background: #f4f5f7 !important;
+  color: #1a1c20 !important;
+}
+.theme-light aside,
+.theme-light header,
+.theme-light .model-card,
+.theme-light [style*='background: rgb(26, 28, 32)'],
+.theme-light [style*='background: #1a1c20'] {
+  background: #ffffff !important;
+}
+.theme-light [style*='background: rgb(22, 24, 28)'],
+.theme-light [style*='background: #16181c'] {
+  background: #f9fafb !important;
+}
+.theme-light [style*='background: rgb(15, 17, 21)'],
+.theme-light [style*='background: #0f1115'] {
+  background: #f0f1f4 !important;
+}
+.theme-light [style*='background: rgb(13, 14, 17)'],
+.theme-light [style*='background: #0d0e11'] {
+  background: #e8eaee !important;
+}
+.theme-light [style*='background: rgb(21, 23, 27)'],
+.theme-light [style*='background: #15171b'] {
+  background: #f4f5f7 !important;
+}
+.theme-light [style*='color: rgb(230, 232, 236)'],
+.theme-light [style*='color: #E6E8EC'] {
+  color: #1a1c20 !important;
+}
+.theme-light [style*='color: rgb(199, 205, 213)'],
+.theme-light [style*='color: #C7CDD5'] {
+  color: #2a2e34 !important;
+}
+.theme-light [style*='color: rgb(180, 186, 194)'],
+.theme-light [style*='color: #B4BAC2'] {
+  color: #3f4550 !important;
+}
+.theme-light [style*='color: rgb(144, 151, 160)'],
+.theme-light [style*='color: #9097A0'] {
+  color: #5a626c !important;
+}
+.theme-light [style*='color: rgb(122, 130, 144)'],
+.theme-light [style*='color: #7A8290'] {
+  color: #6b727b !important;
+}
+.theme-light [style*='border-right: 1px solid rgba(255, 255, 255, 0.05)'],
+.theme-light [style*='border-bottom: 1px solid rgba(255, 255, 255, 0.05)'],
+.theme-light [style*='border-bottom: 1px solid rgba(255, 255, 255, 0.04)'],
+.theme-light [style*='border-top: 1px solid rgba(255, 255, 255, 0.05)'],
+.theme-light [style*='border-left: 1px solid rgba(255, 255, 255, 0.06)'] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+.theme-light .list-row:hover {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+.theme-light .cat-row:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* High-contrast theme */
+.theme-contrast {
+  background: #000 !important;
+}
+.theme-contrast [style*='background: #1a1c20'],
+.theme-contrast [style*='background: rgb(26, 28, 32)'] {
+  background: #0a0a0a !important;
+}
+.theme-contrast [style*='background: #16181c'],
+.theme-contrast [style*='background: rgb(22, 24, 28)'] {
+  background: #050505 !important;
+}
+.theme-contrast [style*='color: #E6E8EC'],
+.theme-contrast [style*='color: rgb(230, 232, 236)'] {
+  color: #ffffff !important;
+}
+.theme-contrast [style*='border'] {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
