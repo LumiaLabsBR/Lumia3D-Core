@@ -9,6 +9,7 @@ import { TweaksPanel } from './components/TweaksPanel.jsx';
 import { StatusBar } from './components/StatusBar.jsx';
 import { AboutModal } from './components/AboutModal.jsx';
 import { LoadingSplash } from './components/LoadingSplash.jsx';
+import { UpdateModal } from './components/UpdateModal.jsx';
 import { Icon } from './components/Icons.jsx';
 import { useLocalStorage } from './hooks/useLocalStorage.js';
 import { useCollections } from './hooks/useCollections.js';
@@ -168,6 +169,19 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [loading, setLoading]     = useState(true);
 
+  // Update flow
+  const [updateInfo, setUpdateInfo]           = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState(null);
+  const [updateMessage, setUpdateMessage]     = useState(null);
+
+  // Settings persistidos no backend (UserSettings.json)
+  const [settings, setSettings] = useState(null);
+  useEffect(() => { ipc.getSettings().then(setSettings).catch(() => {}); }, []);
+  const updateSettings = (next) => {
+    setSettings(next);
+    ipc.saveSettings(next).catch(() => {});
+  };
+
   // Hidden file input para importação via menu/botão
   const fileInputRef = useRef(null);
 
@@ -212,7 +226,31 @@ export default function App() {
       refreshMeta(); refreshModels();
       setTimeout(() => { setImporting(null); setImportStage(''); }, 600);
     });
-    return () => { off1(); off2(); off3(); off4(); };
+
+    // Update flow
+    const off5 = ipc.on('updateAvailable',     (info) => setUpdateInfo(info));
+    const off6 = ipc.on('updateNotAvailable',  () => {
+      setUpdateMessage('Você está na versão mais recente.');
+      setTimeout(() => setUpdateMessage(null), 3000);
+    });
+    const off7 = ipc.on('updateCheckError',    ({ message }) => {
+      setUpdateMessage(`Erro ao verificar atualização: ${message}`);
+      setTimeout(() => setUpdateMessage(null), 4000);
+    });
+    const off8 = ipc.on('downloadProgress',    ({ percent }) => setDownloadProgress(percent));
+    const off9 = ipc.on('downloadComplete',    () => {
+      setDownloadProgress(100);
+      // Backend lança o instalador; ele pede pra fechar a app pra atualizar.
+      // Mantém o modal aberto até o usuario fechar manualmente.
+    });
+    const offA = ipc.on('downloadError',       ({ message }) => {
+      setDownloadProgress(null);
+      setUpdateMessage(`Falha no download: ${message}`);
+      setTimeout(() => setUpdateMessage(null), 4000);
+    });
+    const offB = ipc.on('downloadCanceled',    () => setDownloadProgress(null));
+
+    return () => { off1(); off2(); off3(); off4(); off5(); off6(); off7(); off8(); off9(); offA(); offB(); };
   }, [refreshModels, refreshMeta]);
 
   const visibleModels = useMemo(() => {
@@ -278,6 +316,17 @@ export default function App() {
       fileInputRef.current?.click();
     }
   };
+
+  // Importar pasta — só Photino (não tem equivalente em browser dev)
+  const onPickFolder = async () => {
+    if (!IS_PHOTINO) return;
+    const path = await ipc.pickFolder();
+    if (!path) return;
+    setImporting(0);
+    setImportStage('lendo pasta…');
+    await ipc.importFolder(path, null);
+    // refresh acontece via push events (importComplete listener)
+  };
   const onFilesPicked = (e) => {
     importFiles(Array.from(e.target.files || []));
     e.target.value = '';
@@ -287,7 +336,7 @@ export default function App() {
   const menus = {
     'Arquivo': [
       { label: 'Importar arquivos…', shortcut: 'Ctrl+O', onClick: onPickFiles },
-      { label: 'Importar pasta…',    shortcut: 'Ctrl+Shift+O', disabled: true },
+      { label: 'Importar pasta…',    shortcut: 'Ctrl+Shift+O', onClick: onPickFolder, disabled: !IS_PHOTINO },
       { divider: true },
       { label: 'Recarregar biblioteca', onClick: () => { refreshMeta(); refreshModels(); } },
       { divider: true },
@@ -368,11 +417,35 @@ export default function App() {
       {active && (
         <ModelDetail
           model={active} onClose={() => setActive(null)}
+          allTags={tags}
           isFavorite={isFavorite(active.id)}
           onToggleFavorite={() => toggleFavorite(active.id)}
           collections={collections}
           onAddToCollection={(cid) => addToCollection(cid, active.id)}
           onRemoveFromCollection={(cid) => removeFromCollection(cid, active.id)}
+          onUpdateModel={async (patch) => {
+            await ipc.updateObject(active.id, patch.name ?? active.name, patch.description ?? active.description ?? '', patch.cat ?? active.cat ?? null);
+            setActive({ ...active, ...patch });
+            refreshModels();
+          }}
+          onAddTag={async (tagName) => {
+            const tag = await ipc.createTag(tagName, null);
+            await ipc.addTagToObject(active.id, tag.id);
+            refreshMeta(); refreshModels();
+            setActive({ ...active, tags: [...(active.tags || []), tag.name] });
+          }}
+          onRemoveTag={async (tagName) => {
+            const tag = tags.find(t => t.name === tagName);
+            if (!tag) return;
+            await ipc.removeTagFromObject(active.id, tag.id);
+            refreshMeta(); refreshModels();
+            setActive({ ...active, tags: (active.tags || []).filter(t => t !== tagName) });
+          }}
+          onDelete={async () => {
+            await ipc.deleteObject(active.id);
+            setActive(null);
+            refreshMeta(); refreshModels();
+          }}
         />
       )}
       {importing != null && <Toast progress={importing} stage={importStage} />}
@@ -382,9 +455,33 @@ export default function App() {
           setTweaks={setTweaks}
           onReset={resetTweaks}
           onClose={() => setTweaksOpen(false)}
+          settings={settings}
+          onSettingsChange={updateSettings}
         />
       )}
       {aboutOpen && <AboutModal appInfo={appInfo} onClose={() => setAboutOpen(false)} />}
+      {updateInfo && (
+        <UpdateModal
+          info={updateInfo}
+          downloadProgress={downloadProgress}
+          onLater={() => { setUpdateInfo(null); setDownloadProgress(null); }}
+          onDownload={() => {
+            setDownloadProgress(0);
+            ipc.downloadUpdate(updateInfo.installerUrl, updateInfo.sha256Url, updateInfo.installerSize);
+          }}
+        />
+      )}
+      {updateMessage && (
+        <div style={{
+          position: 'fixed', bottom: 36, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1c20', border: '1px solid rgba(255,255,255,0.08)',
+          color: '#E6E8EC', padding: '10px 16px', borderRadius: 6, zIndex: 60,
+          fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          animation: 'slideUp 200ms ease-out',
+        }}>
+          {updateMessage}
+        </div>
+      )}
       <LoadingSplash visible={loading} />
     </div>
   );

@@ -1,5 +1,29 @@
 import { Icon } from './Icons.jsx';
 
+const Toggle = ({ checked, onChange, label }) => (
+  <label style={{
+    display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+    padding: '4px 0', fontSize: 11.5, color: '#C7CDD5',
+  }}>
+    <span style={{
+      position: 'relative', width: 28, height: 16, borderRadius: 8,
+      background: checked ? 'rgba(255, 122, 26, 0.5)' : 'rgba(255,255,255,0.08)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      transition: 'background 120ms', flexShrink: 0,
+    }}>
+      <span style={{
+        position: 'absolute', top: 1, left: checked ? 13 : 1,
+        width: 12, height: 12, borderRadius: '50%',
+        background: checked ? '#FFA85F' : '#7A8290',
+        transition: 'left 120ms, background 120ms',
+      }} />
+    </span>
+    <span style={{ flex: 1 }}>{label}</span>
+    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)}
+      style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
+  </label>
+);
+
 const Section = ({ title, children }) => (
   <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
     <div style={{
@@ -24,8 +48,9 @@ const Radio = ({ options, value, onChange }) => (
   </div>
 );
 
-export const TweaksPanel = ({ tweaks, setTweaks, onReset, onClose }) => {
+export const TweaksPanel = ({ tweaks, setTweaks, onReset, onClose, settings, onSettingsChange }) => {
   const set = (patch) => setTweaks({ ...tweaks, ...patch });
+  const setSetting = (patch) => onSettingsChange?.({ ...settings, ...patch });
   return (
     <div style={{
       position: 'absolute', top: 50, right: 14, zIndex: 60,
@@ -78,6 +103,20 @@ export const TweaksPanel = ({ tweaks, setTweaks, onReset, onClose }) => {
           ]}
         />
       </Section>
+      {settings && (
+        <Section title="Atualizações">
+          <Toggle
+            checked={!!settings.autoCheckUpdates}
+            onChange={(v) => setSetting({ autoCheckUpdates: v })}
+            label="Verificar automaticamente ao iniciar"
+          />
+          <Toggle
+            checked={!!settings.includePreReleases}
+            onChange={(v) => setSetting({ includePreReleases: v })}
+            label="Incluir pré-releases (alpha/beta)"
+          />
+        </Section>
+      )}
       <div style={{
         padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10,
         fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C',
