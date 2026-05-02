@@ -62,7 +62,6 @@ internal static class Program
         // off-screen) pode salvar valores degenerados. Reseta TUDO se qualquer
         // dimensão suspeita aparece.
         const int MinW = 900, MinH = 600;
-        const int DefaultW = 1280, DefaultH = 800;
 
         int width  = (int)settings.WindowWidth;
         int height = (int)settings.WindowHeight;
@@ -70,12 +69,12 @@ internal static class Program
         int? top   = double.IsNaN(settings.WindowY) ? null : (int?)settings.WindowY;
 
         // Obtém dimensões reais da tela primária para validar a geometria salva.
-        // Isso evita o caso em que o usuário muda DPI ou resolução e as dimensões
-        // salvas (em pixels físicos) não fazem sentido para a tela atual.
+        // Evita DPI mismatch (pixels físicos salvos vs lógicos atuais) ou monitor
+        // desconectado que resulta em janela fora da área visível.
         var screen = System.Windows.Forms.Screen.PrimaryScreen?.WorkingArea
                      ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
-        int maxW = Math.Max(screen.Width  + 64, DefaultW);
-        int maxH = Math.Max(screen.Height + 64, DefaultH);
+        int maxW = screen.Width;
+        int maxH = screen.Height;
 
         bool sane = width >= MinW && height >= MinH
                  && width  <= maxW && height <= maxH
@@ -84,14 +83,20 @@ internal static class Program
 
         AppLogger.Info($"Window settings load: w={width} h={height} x={left?.ToString() ?? "?"} y={top?.ToString() ?? "?"} screen={screen.Width}x{screen.Height} sane={sane}");
 
+        // Quando a geometria salva é inválida, abre maximizado — mais confiável que
+        // tentar adivinhar um tamanho em pixels num ambiente DPI desconhecido.
+        bool openMaximized = settings.IsMaximized || !sane;
         if (!sane)
         {
-            AppLogger.Warn($"Window geometry fora dos limites da tela ({screen.Width}x{screen.Height}) — resetando para default centralizado");
-            width  = DefaultW;
-            height = DefaultH;
-            left   = null;
-            top    = null;
+            AppLogger.Warn($"Window geometry fora dos limites da tela — abrindo maximizado");
+            left = null;
+            top  = null;
         }
+
+        // Usa 80% da tela como tamanho inicial (para quando sair do maximizado)
+        int DefaultW = Math.Max(MinW, (int)(screen.Width  * 0.8));
+        int DefaultH = Math.Max(MinH, (int)(screen.Height * 0.8));
+        if (!sane) { width = DefaultW; height = DefaultH; }
 
         var window = new PhotinoWindow()
             .SetTitle(AppName)
@@ -110,17 +115,12 @@ internal static class Program
                 ((PhotinoWindow)sender!).SendWebMessage(responseJson);
             });
 
-        if (left.HasValue && top.HasValue && sane)
-        {
+        if (left.HasValue && top.HasValue)
             window.SetLeft(left.Value).SetTop(top.Value);
-        }
         else
-        {
-            // Sem posição válida → centraliza
             window.Center();
-        }
 
-        if (settings.IsMaximized && sane)
+        if (openMaximized)
             window.SetMaximized(true);
 
         // Salvar geometria ao fechar — APENAS se sã (evita persistir ruído)
@@ -129,16 +129,16 @@ internal static class Program
             var w = (PhotinoWindow)sender;
             var s = UserSettings.Load();
             int cw = w.Width, ch = w.Height, cx = w.Left, cy = w.Top;
-            // Reutiliza maxW/maxH da tela calculados na abertura (capturados via closure)
             bool validClose = cw >= MinW && ch >= MinH
-                           && cw <= maxW && ch <= maxH
+                           && cw <= maxW + 64 && ch <= maxH + 64
                            && cx > -64 && cy > -64;
             if (validClose)
             {
-                s.WindowWidth  = cw;
-                s.WindowHeight = ch;
-                s.WindowX      = cx;
-                s.WindowY      = cy;
+                s.WindowWidth   = cw;
+                s.WindowHeight  = ch;
+                s.WindowX       = cx;
+                s.WindowY       = cy;
+                s.IsMaximized   = w.Maximized;
                 s.Save();
             }
             else
