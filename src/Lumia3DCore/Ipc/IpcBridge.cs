@@ -99,6 +99,8 @@ public class IpcBridge
                 "openExternal"        => HandleOpenExternal(request),
                 "pickFiles"           => HandlePickFiles(),
                 "pickFolder"          => HandlePickFolder(),
+                "readFileAsBase64"    => HandleReadFileAsBase64(request),
+                "showInFolder"        => HandleShowInFolder(request),
 
                 _ => IpcResponse.Fail($"Unknown action: {request.Action}")
             };
@@ -590,6 +592,86 @@ public class IpcBridge
         catch (Exception ex)
         {
             AppLogger.Warn($"pickFolder falhou: {ex.Message}");
+            return IpcResponse.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Lê arquivo binário e retorna como base64. WebView2 bloqueia fetch de
+    /// file:// para JS por padrão; loaders.js usa isso para carregar STL/OBJ/GLB
+    /// via IPC e passar pra THREE.js .parse(buffer).
+    /// </summary>
+    private IpcResponse HandleReadFileAsBase64(IpcRequest req)
+    {
+        if (!req.Payload.TryGetProperty("path", out var pProp))
+            return IpcResponse.Fail("path required");
+        string path = pProp.GetString() ?? "";
+
+        // Defesa: só lê arquivos com extensão 3D conhecida (não vira leitor genérico)
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (!LibraryManager.Object3DExtensions.Contains(ext))
+            return IpcResponse.Fail($"Extensão não permitida: {ext}");
+
+        try
+        {
+            if (!File.Exists(path)) return IpcResponse.Fail("Arquivo não encontrado");
+            // Cap defensivo: 200 MB. Modelos maiores são raros e travariam o WebView.
+            var info = new FileInfo(path);
+            if (info.Length > 200L * 1024 * 1024)
+                return IpcResponse.Fail($"Arquivo muito grande: {info.Length / (1024 * 1024)} MB");
+
+            byte[] bytes = File.ReadAllBytes(path);
+            return IpcResponse.Ok(new { data = Convert.ToBase64String(bytes) });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"readFileAsBase64 falhou: {ex.Message}");
+            return IpcResponse.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Abre o Windows Explorer com o arquivo selecionado na pasta.
+    /// Usado pelo botão "Mostrar na pasta" do Detail.
+    /// </summary>
+    private IpcResponse HandleShowInFolder(IpcRequest req)
+    {
+        if (!req.Payload.TryGetProperty("path", out var pProp))
+            return IpcResponse.Fail("path required");
+
+        string path = pProp.GetString() ?? "";
+        if (string.IsNullOrEmpty(path))
+            return IpcResponse.Fail("path vazio");
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                // /select, abre Explorer com o arquivo destacado
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName  = "explorer.exe",
+                    Arguments = $"/select,\"{path}\"",
+                    UseShellExecute = true,
+                });
+            }
+            else if (Directory.Exists(path))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName  = path,
+                    UseShellExecute = true,
+                });
+            }
+            else
+            {
+                return IpcResponse.Fail("Caminho não existe");
+            }
+            return IpcResponse.Ok(null);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warn($"showInFolder falhou: {ex.Message}");
             return IpcResponse.Fail(ex.Message);
         }
     }

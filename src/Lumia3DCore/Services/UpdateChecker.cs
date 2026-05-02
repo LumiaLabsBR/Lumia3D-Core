@@ -87,7 +87,9 @@ public static class UpdateChecker
                         installerUrl  = dlUrl;
                         installerSize = asset.TryGetProperty("size", out var sp) ? sp.GetInt64() : 0;
                     }
-                    else if (name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase))
+                    else if (name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase) ||
+                             name.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase) ||
+                             name.Equals("SHA256SUMS", StringComparison.OrdinalIgnoreCase))
                     {
                         sha256Url = dlUrl;
                     }
@@ -147,12 +149,15 @@ public static class UpdateChecker
             if (!string.IsNullOrEmpty(info.Sha256Url))
             {
                 string raw      = await _http.GetStringAsync(info.Sha256Url, ct).ConfigureAwait(false);
-                string expected = raw.Trim().Split(' ', '\t')[0].ToLowerInvariant();
+                string expected = ExtractExpectedHash(raw, safeName);
                 string actual   = ComputeSha256(installerPath);
-                if (actual != expected)
+                if (string.IsNullOrEmpty(expected))
+                    AppLogger.Warn($"SHA256SUMS não tem entrada para '{safeName}', verificação pulada.");
+                else if (actual != expected)
                     throw new InvalidDataException(
                         $"SHA256 não confere. Esperado: {expected}  Obtido: {actual}");
-                AppLogger.Info("SHA256 verificado com sucesso.");
+                else
+                    AppLogger.Info("SHA256 verificado com sucesso.");
             }
 
             // Lança instalador e permite que o app feche
@@ -193,6 +198,37 @@ public static class UpdateChecker
             received += read;
             onProgress(received, total);
         }
+    }
+
+    /// <summary>
+    /// Extrai o hash esperado do conteúdo de um arquivo `.sha256` ou `SHA256SUMS.txt`.
+    /// Suporta formatos:
+    ///   - `&lt;hash&gt;` (arquivo .sha256 simples)
+    ///   - `&lt;hash&gt;  &lt;filename&gt;` (uma ou várias linhas, padrão sha256sum)
+    /// </summary>
+    private static string ExtractExpectedHash(string raw, string installerName)
+    {
+        var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        // Caso simples: 1 linha sem nome de arquivo
+        if (lines.Length == 1)
+        {
+            var first = lines[0].Trim().Split(' ', '\t')[0];
+            if (first.Length >= 32) return first.ToLowerInvariant();
+        }
+        // Multi-linha: procura linha que menciona o nome do installer
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.IndexOf(installerName, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                var parts = trimmed.Split(' ', '\t');
+                foreach (var p in parts)
+                {
+                    if (p.Length >= 32) return p.ToLowerInvariant();
+                }
+            }
+        }
+        return string.Empty;
     }
 
     private static string ComputeSha256(string filePath)

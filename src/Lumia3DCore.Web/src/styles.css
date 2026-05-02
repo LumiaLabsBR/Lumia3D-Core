@@ -51,6 +51,13 @@ body {
 .cat-row:hover {
   background: rgba(255, 255, 255, 0.04);
 }
+.cat-item:hover .cat-actions {
+  display: inline-flex !important;
+}
+.cat-actions button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6e8ec;
+}
 .tag-pill:hover {
   background: rgba(255, 255, 255, 0.06) !important;
   color: #e6e8ec !important;

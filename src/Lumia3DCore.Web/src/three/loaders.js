@@ -1,16 +1,22 @@
-// Real STL / GLB / OBJ loader wrappers around three.js examples loaders.
-// Falls back to procedural geometry for shapes without a real file.
+// Loaders STL / OBJ / GLB para three.js.
+//
+// Em Photino (WebView2), file:// não é acessível via fetch (sandbox de segurança).
+// Solução: ler o arquivo via IPC como base64 e usar loader.parse(buffer).
+// Em dev (browser), URLs http(s) funcionam normal via loader.load(url).
 
 import * as THREE from 'three';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { STLLoader }  from 'three/examples/jsm/loaders/STLLoader.js';
+import { OBJLoader }  from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { api as ipc } from '../api/client.js';
 
-const stlLoader = new STLLoader();
-const objLoader = new OBJLoader();
+const stlLoader  = new STLLoader();
+const objLoader  = new OBJLoader();
 const gltfLoader = new GLTFLoader();
 
-// Center + scale a loaded object so it fits a unit-ish bounding box.
+const IS_PHOTINO = typeof window !== 'undefined' && typeof window.external?.sendMessage === 'function';
+
+// Centraliza, escala pra unit-bbox e apoia no chão (y = -1).
 const fit = (obj, target = 1.6) => {
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
@@ -19,7 +25,6 @@ const fit = (obj, target = 1.6) => {
   const max = Math.max(size.x, size.y, size.z) || 1;
   const k = target / max;
   obj.scale.multiplyScalar(k);
-  // Drop the object onto the floor (y = -1 in our scene).
   const newBox = new THREE.Box3().setFromObject(obj);
   obj.position.y -= newBox.min.y + 1;
   return obj;
@@ -35,66 +40,95 @@ const applyMaterial = (obj, material) => {
   });
 };
 
-// Loaders return a Promise<THREE.Object3D>.
-export function loadSTL(url, material) {
+// base64 → ArrayBuffer
+function base64ToArrayBuffer(b64) {
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// "file:///C:/path/to/x.stl" → "C:/path/to/x.stl" (decode + remove scheme)
+function stripFileScheme(url) {
+  if (typeof url !== 'string') return url;
+  if (url.startsWith('file:///')) return decodeURIComponent(url.substring('file:///'.length));
+  return url;
+}
+
+// ── STL ─────────────────────────────────────────────────────────────────
+function parseSTL(buffer, material) {
+  const geometry = stlLoader.parse(buffer);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  const group = new THREE.Group();
+  group.add(mesh);
+  return fit(group);
+}
+
+export async function loadSTL(urlOrPath, material) {
+  if (IS_PHOTINO) {
+    const b64 = await ipc.readFileAsBase64(stripFileScheme(urlOrPath));
+    if (!b64) throw new Error('readFileAsBase64 returned null');
+    return parseSTL(base64ToArrayBuffer(b64), material);
+  }
   return new Promise((resolve, reject) => {
-    stlLoader.load(
-      url,
-      (geometry) => {
-        geometry.computeVertexNormals();
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.castShadow = true;
-        const group = new THREE.Group();
-        group.add(mesh);
-        resolve(fit(group));
-      },
-      undefined,
-      reject
-    );
+    stlLoader.load(urlOrPath, (geometry) => resolve(parseSTL(geometry.array ? geometry.array.buffer : geometry, material)), undefined, reject);
   });
 }
 
-export function loadOBJ(url, material) {
+// ── OBJ ─────────────────────────────────────────────────────────────────
+function parseOBJ(text, material) {
+  const obj = objLoader.parse(text);
+  applyMaterial(obj, material);
+  return fit(obj);
+}
+
+export async function loadOBJ(urlOrPath, material) {
+  if (IS_PHOTINO) {
+    const b64 = await ipc.readFileAsBase64(stripFileScheme(urlOrPath));
+    if (!b64) throw new Error('readFileAsBase64 returned null');
+    const text = new TextDecoder('utf-8').decode(base64ToArrayBuffer(b64));
+    return parseOBJ(text, material);
+  }
   return new Promise((resolve, reject) => {
-    objLoader.load(
-      url,
-      (obj) => {
-        applyMaterial(obj, material);
-        resolve(fit(obj));
-      },
-      undefined,
-      reject
-    );
+    objLoader.load(urlOrPath, (obj) => { applyMaterial(obj, material); resolve(fit(obj)); }, undefined, reject);
   });
 }
 
-export function loadGLB(url) {
+// ── GLB ─────────────────────────────────────────────────────────────────
+function parseGLB(buffer) {
   return new Promise((resolve, reject) => {
-    gltfLoader.load(
-      url,
-      (gltf) => {
-        gltf.scene.traverse((c) => {
-          if (c.isMesh) c.castShadow = true;
-        });
-        resolve(fit(gltf.scene));
-      },
-      undefined,
-      reject
-    );
+    gltfLoader.parse(buffer, '', (gltf) => {
+      gltf.scene.traverse((c) => { if (c.isMesh) c.castShadow = true; });
+      resolve(fit(gltf.scene));
+    }, reject);
   });
 }
 
-// Universal entry — pick a loader by file extension.
-// Returns null if there's no URL (caller should build a procedural fallback).
+export async function loadGLB(urlOrPath) {
+  if (IS_PHOTINO) {
+    const b64 = await ipc.readFileAsBase64(stripFileScheme(urlOrPath));
+    if (!b64) throw new Error('readFileAsBase64 returned null');
+    return parseGLB(base64ToArrayBuffer(b64));
+  }
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(urlOrPath, (gltf) => {
+      gltf.scene.traverse((c) => { if (c.isMesh) c.castShadow = true; });
+      resolve(fit(gltf.scene));
+    }, undefined, reject);
+  });
+}
+
+// Universal entry — escolhe loader por extensão. Retorna null sem URL
+// (caller usa procedural fallback).
 export function loadModel({ url, format }, material) {
   if (!url) return Promise.resolve(null);
-  const ext = (format || url.split('.').pop()).toLowerCase();
+  const ext = (format || url.split('.').pop()).toLowerCase().replace('.', '');
   if (ext === 'stl') return loadSTL(url, material);
   if (ext === 'obj') return loadOBJ(url, material);
   if (ext === 'glb' || ext === 'gltf') return loadGLB(url);
-  if (ext === '3mf') {
-    // 3MF support would need an extra dependency; for now treat as missing.
-    return Promise.resolve(null);
-  }
+  // 3MF: parser não-trivial (XML em ZIP); cai pro procedural por agora.
   return Promise.resolve(null);
 }

@@ -86,7 +86,7 @@ function Make-Bitmap([int]$size) {
     return $bmp
 }
 
-$sizes = @(16, 32, 48, 256)
+$sizes = @(16, 24, 32, 40, 48, 64, 128, 256)
 $pngs  = [System.Collections.Generic.List[byte[]]]::new()
 
 foreach ($s in $sizes) {

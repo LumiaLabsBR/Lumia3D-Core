@@ -58,10 +58,20 @@ internal static class Program
 
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
 
+        // Sanitiza tamanho: se UserSettings tiver valor degenerado (minimização
+        // anterior, DPI bug, etc.), volta pro default. Mínimo absoluto: 800x500.
+        const int MinW = 800, MinH = 500;
+        int width  = (int)settings.WindowWidth;
+        int height = (int)settings.WindowHeight;
+        if (width  < MinW) width  = 1280;
+        if (height < MinH) height = 800;
+
         var window = new PhotinoWindow()
             .SetTitle(AppName)
-            .SetWidth((int)settings.WindowWidth)
-            .SetHeight((int)settings.WindowHeight)
+            .SetWidth(width)
+            .SetHeight(height)
+            .SetMinWidth(MinW)
+            .SetMinHeight(MinH)
             .SetDevToolsEnabled(IsDebug())
             .SetContextMenuEnabled(IsDebug())
             .SetIconFile(File.Exists(iconPath) ? iconPath : string.Empty)
@@ -80,16 +90,20 @@ internal static class Program
         if (settings.IsMaximized)
             window.SetMaximized(true);
 
-        // Salvar posição ao fechar
+        // Salvar posição ao fechar — só se as dimensões forem sãs
+        // (evita persistir tamanho minimizado/zero acidental).
         window.RegisterWindowClosingHandler((object sender, EventArgs args) =>
         {
             var w = (PhotinoWindow)sender;
             var s = UserSettings.Load();
-            s.WindowWidth  = w.Width;
-            s.WindowHeight = w.Height;
-            s.WindowX      = w.Left;
-            s.WindowY      = w.Top;
-            s.Save();
+            if (w.Width >= MinW && w.Height >= MinH)
+            {
+                s.WindowWidth  = w.Width;
+                s.WindowHeight = w.Height;
+                s.WindowX      = w.Left;
+                s.WindowY      = w.Top;
+                s.Save();
+            }
             return false; // false = permitir fechar
         });
 

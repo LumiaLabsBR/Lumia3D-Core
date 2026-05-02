@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { Icon, Tag } from './Icons.jsx';
 import { Lumia3DLogo, LumiaLabsSignature } from './Logo.jsx';
 
+const catBtn = {
+  width: 18, height: 18, padding: 0, borderRadius: 3,
+  border: 'none', background: 'transparent', color: '#7A8290',
+  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+};
+
 const SectionLabel = ({ children, style }) => (
   <div style={{
     fontFamily: '"JetBrains Mono", monospace',
@@ -11,23 +17,32 @@ const SectionLabel = ({ children, style }) => (
   }}>{children}</div>
 );
 
-const CategoryTree = ({ categories, selectedId, onSelect, totalCount }) => {
+const CategoryTree = ({ categories, selectedId, onSelect, totalCount, onRenameCat, onDeleteCat }) => {
   const [expanded, setExpanded] = useState(new Set(['mech', 'arch']));
+  const [editingId, setEditingId] = useState(null);
+  const [draftName, setDraftName] = useState('');
   const toggle = (id) => {
     const next = new Set(expanded);
     next.has(id) ? next.delete(id) : next.add(id);
     setExpanded(next);
   };
+  const startEdit = (cat) => { setEditingId(cat.id); setDraftName(cat.name); };
+  const commitEdit = () => {
+    const n = draftName.trim();
+    if (n && editingId != null) onRenameCat?.(editingId, n);
+    setEditingId(null); setDraftName('');
+  };
   const renderNode = (cat, depth = 0) => {
     const hasChildren = cat.children && cat.children.length > 0;
     const isExpanded = expanded.has(cat.id);
     const isSelected = selectedId === cat.id;
+    const isEditing = editingId === cat.id;
     return (
       <div key={cat.id}>
-        <div onClick={() => onSelect(cat.id)} className="cat-row" style={{
+        <div onClick={() => !isEditing && onSelect(cat.id)} className="cat-row cat-item" style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          paddingLeft: 8 + depth * 14, paddingRight: 8, height: 28,
-          borderRadius: 4, cursor: 'pointer',
+          paddingLeft: 8 + depth * 14, paddingRight: 4, height: 28,
+          borderRadius: 4, cursor: isEditing ? 'text' : 'pointer',
           background: isSelected ? 'rgba(255, 122, 26, 0.13)' : 'transparent',
           color: isSelected ? '#FFA85F' : '#C7CDD5',
           fontSize: 12.5, transition: 'background 100ms',
@@ -40,8 +55,43 @@ const CategoryTree = ({ categories, selectedId, onSelect, totalCount }) => {
             <Icon name={isExpanded ? 'chevronDown' : 'chevronRight'} size={11} strokeWidth={2} />
           </button>
           <Icon name={isExpanded && hasChildren ? 'folderOpen' : 'folder'} size={13} stroke={isSelected ? '#FFA85F' : '#7A8290'} strokeWidth={1.5} />
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.name}</span>
-          <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C' }}>{cat.count}</span>
+          {isEditing ? (
+            <input
+              autoFocus value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitEdit();
+                if (e.key === 'Escape') { setEditingId(null); setDraftName(''); }
+              }}
+              style={{
+                flex: 1, height: 22, padding: '0 4px',
+                background: '#0f1115', border: '1px solid rgba(255, 122, 26, 0.4)',
+                borderRadius: 3, color: '#E6E8EC', fontSize: 12, fontFamily: 'inherit', outline: 'none',
+              }} />
+          ) : (
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.name}</span>
+          )}
+          {!isEditing && (
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#5A626C', marginRight: 2 }}>{cat.count}</span>
+          )}
+          {!isEditing && (onRenameCat || onDeleteCat) && (
+            <span className="cat-actions" style={{ display: 'none', gap: 2 }}>
+              {onRenameCat && (
+                <button onClick={(e) => { e.stopPropagation(); startEdit(cat); }} title="Renomear" style={catBtn}>
+                  <Icon name="edit" size={10} strokeWidth={1.7} />
+                </button>
+              )}
+              {onDeleteCat && (
+                <button onClick={(e) => { e.stopPropagation();
+                  if (confirm(`Excluir categoria "${cat.name}"?\n\nOs modelos não serão apagados — apenas perderão a categoria.`)) onDeleteCat(cat.id);
+                }} title="Excluir" style={catBtn}>
+                  <Icon name="trash" size={10} strokeWidth={1.7} />
+                </button>
+              )}
+            </span>
+          )}
         </div>
         {hasChildren && isExpanded && <div>{cat.children.map(c => renderNode(c, depth + 1))}</div>}
       </div>
@@ -96,6 +146,7 @@ export const Sidebar = ({
   selectedCat, onSelectCat, activeTags, onToggleTag,
   collections, favorites, FAV_ID, selectedCollection, onSelectCollection,
   onCreateCollection, onDeleteCollection,
+  onRenameCategory, onDeleteCategory,
   onImport,
 }) => {
   const [creating, setCreating] = useState(false);
@@ -130,7 +181,8 @@ export const Sidebar = ({
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 12px' }}>
         <SectionLabel>Categorias</SectionLabel>
-        <CategoryTree categories={categories} selectedId={selectedCat} onSelect={onSelectCat} totalCount={stats.count} />
+        <CategoryTree categories={categories} selectedId={selectedCat} onSelect={onSelectCat} totalCount={stats.count}
+          onRenameCat={onRenameCategory} onDeleteCat={onDeleteCategory} />
         <SectionLabel style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
           <span>Coleções</span>
           <button onClick={() => setCreating(true)} title="Nova coleção" style={{

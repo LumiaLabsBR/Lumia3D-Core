@@ -460,6 +460,16 @@ export default function App() {
           onSelectCollection={setSelectedCollection}
           onCreateCollection={createCollection}
           onDeleteCollection={deleteCollection}
+          onRenameCategory={async (id, name) => {
+            await ipc.updateCategory(id, name, null, 0);
+            refreshMeta();
+          }}
+          onDeleteCategory={async (id) => {
+            await ipc.deleteCategory(id);
+            // Limpa filtro se a categoria atual foi deletada
+            if (filters.selectedCat === id) setFilters({ ...filters, selectedCat: null });
+            refreshMeta(); refreshModels();
+          }}
           onImport={onPickFiles}
         />
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

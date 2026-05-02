@@ -167,6 +167,10 @@ export const api = {
   // Native pickers (WebView2 esconde File.path; precisa de dialog Win32)
   pickFiles:       () => send('pickFiles').then(r => r?.paths ?? []),
   pickFolder:      () => send('pickFolder').then(r => r?.path ?? null),
+  // Leitura de modelo 3D via IPC (WebView2 bloqueia fetch de file://)
+  readFileAsBase64: (path) => send('readFileAsBase64', { path }).then(r => r?.data ?? null),
+  // Abre Explorer com o arquivo selecionado
+  showInFolder:    (path) => send('showInFolder', { path }),
 
   // Eventos push (C# → frontend)
   on:  (eventName, handler) => _onEvent(eventName, handler),

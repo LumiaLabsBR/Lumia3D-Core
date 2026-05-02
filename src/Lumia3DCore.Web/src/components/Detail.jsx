@@ -4,6 +4,7 @@ import { Icon, FormatBadge, Tag } from './Icons.jsx';
 import { SectionLabel } from './Sidebar.jsx';
 import { buildProcedural, matClay } from '../three/procedural.js';
 import { loadModel } from '../three/loaders.js';
+import { api as ipc } from '../api/client.js';
 
 const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
   const ref = useRef(null);
@@ -494,8 +495,10 @@ export const ModelDetail = ({
             padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.05)',
             display: 'flex', gap: 8,
           }}>
-            <button style={{ ...footerBtn, flex: 1, background: 'rgba(255, 122, 26, 0.13)', borderColor: 'rgba(255, 122, 26, 0.3)', color: '#FFA85F' }}>
-              <Icon name="download" size={13} strokeWidth={1.8} /> Exportar
+            <button onClick={() => model.url && ipc.showInFolder(model.url.replace(/^file:\/\/\//, '').replace(/\//g, '\\'))}
+              title="Abrir o arquivo no Explorer"
+              style={{ ...footerBtn, flex: 1, background: 'rgba(255, 122, 26, 0.13)', borderColor: 'rgba(255, 122, 26, 0.3)', color: '#FFA85F' }}>
+              <Icon name="folder" size={13} strokeWidth={1.8} /> Mostrar na pasta
             </button>
             {onDelete && (
               <button onClick={() => setConfirmingDelete(true)} title="Excluir modelo"
