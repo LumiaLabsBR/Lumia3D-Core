@@ -8,13 +8,12 @@ import * as THREE from 'three';
 import { STLLoader }   from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader }   from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader }  from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
+import JSZip from 'jszip';
 import { api as ipc } from '../api/client.js';
 
 const stlLoader  = new STLLoader();
 const objLoader  = new OBJLoader();
 const gltfLoader = new GLTFLoader();
-const tmfLoader  = new ThreeMFLoader();
 
 const IS_PHOTINO = typeof window !== 'undefined' && typeof window.external?.sendMessage === 'function';
 
@@ -124,31 +123,96 @@ export async function loadGLB(urlOrPath) {
 }
 
 // ── 3MF ─────────────────────────────────────────────────────────────────
-// 3MF é um ZIP com modelos XML. ThreeMFLoader aceita ArrayBuffer via parse().
-function parse3MF(buffer, material) {
-  console.log('[Lumia3D] parse3MF: buffer size=', buffer.byteLength);
-  const obj = tmfLoader.parse(buffer);
-  if (!obj) throw new Error('ThreeMFLoader.parse retornou null');
-  // O 3MFLoader retorna Group; aplicar material substitui qualquer textura embutida
-  // pelo nosso material clay padrão, o que é OK pra visualização técnica.
-  applyMaterial(obj, material);
-  console.log('[Lumia3D] parse3MF: success, children=', obj.children?.length);
-  return fit(obj);
+//
+// O `ThreeMFLoader` oficial do three.js é frágil com 3MFs gerados por
+// slicers modernos (Bambu Lab, PrusaSlicer, Cura, OrcaSlicer). Crasha com
+// "Cannot read properties of undefined (reading 'mesh')" quando o XML usa
+// extensões proprietárias ou estrutura via <components>.
+//
+// Parser próprio: JSZip extrai o `*.model` (XML) → DOMParser → coleta
+// vertices e triangles de TODOS os <mesh> do documento, ignora extensões
+// e build matrices. Funciona pra qualquer 3MF padrão básico.
+//
+async function parse3MFCustom(buffer, material) {
+  console.log('[Lumia3D] parse3MFCustom: buffer size=', buffer.byteLength);
+  const zip = await JSZip.loadAsync(buffer);
+
+  // Procura QUALQUER arquivo .model no zip (geralmente /3D/3dmodel.model)
+  const modelEntry = Object.values(zip.files).find(
+    (f) => !f.dir && f.name.toLowerCase().endsWith('.model')
+  );
+  if (!modelEntry) throw new Error('3MF sem arquivo .model dentro');
+
+  const xml = await modelEntry.async('string');
+  console.log('[Lumia3D] parse3MFCustom: xml size=', xml.length);
+
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) throw new Error('XML inválido no 3MF: ' + parseError.textContent.slice(0, 100));
+
+  // getElementsByTagName ignora namespaces (mais permissivo que querySelector)
+  const meshes = doc.getElementsByTagName('mesh');
+  if (meshes.length === 0) throw new Error('Nenhum <mesh> encontrado no 3MF');
+
+  console.log('[Lumia3D] parse3MFCustom: meshes=', meshes.length);
+  const group = new THREE.Group();
+  let totalVerts = 0, totalTris = 0;
+
+  for (const mesh of meshes) {
+    const verticesEls = mesh.getElementsByTagName('vertex');
+    const trianglesEls = mesh.getElementsByTagName('triangle');
+    if (verticesEls.length === 0 || trianglesEls.length === 0) continue;
+
+    const positions = new Float32Array(verticesEls.length * 3);
+    for (let i = 0; i < verticesEls.length; i++) {
+      const v = verticesEls[i];
+      positions[i * 3 + 0] = parseFloat(v.getAttribute('x')) || 0;
+      positions[i * 3 + 1] = parseFloat(v.getAttribute('y')) || 0;
+      positions[i * 3 + 2] = parseFloat(v.getAttribute('z')) || 0;
+    }
+
+    // Decide tipo de array de índices baseado no numero de vertices
+    const Indices = verticesEls.length > 65535 ? Uint32Array : Uint16Array;
+    const indices = new Indices(trianglesEls.length * 3);
+    for (let i = 0; i < trianglesEls.length; i++) {
+      const t = trianglesEls[i];
+      indices[i * 3 + 0] = parseInt(t.getAttribute('v1'), 10) || 0;
+      indices[i * 3 + 1] = parseInt(t.getAttribute('v2'), 10) || 0;
+      indices[i * 3 + 2] = parseInt(t.getAttribute('v3'), 10) || 0;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.computeVertexNormals();
+
+    const meshObj = new THREE.Mesh(geometry, material);
+    meshObj.castShadow = true;
+    group.add(meshObj);
+
+    totalVerts += verticesEls.length;
+    totalTris  += trianglesEls.length;
+  }
+
+  console.log('[Lumia3D] parse3MFCustom: success, vertices=', totalVerts, 'triangles=', totalTris);
+  if (group.children.length === 0) throw new Error('Nenhum mesh válido extraído do 3MF');
+
+  return fit(group);
 }
 
 export async function load3MF(urlOrPath, material) {
   console.log('[Lumia3D] load3MF', urlOrPath, 'IS_PHOTINO=', IS_PHOTINO);
   if (IS_PHOTINO) {
     const path = stripFileScheme(urlOrPath);
-    console.log('[Lumia3D] readFileAsBase64', path);
     const b64 = await ipc.readFileAsBase64(path);
     if (!b64) throw new Error('readFileAsBase64 returned null');
     console.log('[Lumia3D] base64 length=', b64.length);
-    return parse3MF(base64ToArrayBuffer(b64), material);
+    return await parse3MFCustom(base64ToArrayBuffer(b64), material);
   }
-  return new Promise((resolve, reject) => {
-    tmfLoader.load(urlOrPath, (obj) => { applyMaterial(obj, material); resolve(fit(obj)); }, undefined, reject);
-  });
+  // Em dev, fetch direto e parse via JSZip
+  const resp = await fetch(urlOrPath);
+  const buffer = await resp.arrayBuffer();
+  return await parse3MFCustom(buffer, material);
 }
 
 // Universal entry — escolhe loader por extensão. Retorna null sem URL
