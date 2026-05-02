@@ -6,7 +6,7 @@ import { buildProcedural, matClay } from '../three/procedural.js';
 import { loadModel } from '../three/loaders.js';
 import { api as ipc } from '../api/client.js';
 
-const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
+const ThreeViewer = ({ model, autoRotate, showGrid, brightness, thumbnailUrl }) => {
   const ref = useRef(null);
   const stateRef = useRef({});
   const [loading, setLoading] = useState(false);
@@ -159,7 +159,27 @@ const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
           carregando malha…
         </div>
       )}
-      {loadError && (
+      {loadError && thumbnailUrl && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 3,
+          background: '#0a0b0e',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <img src={thumbnailUrl} alt="preview do slicer"
+            style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain', borderRadius: 4 }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+          <div style={{
+            position: 'absolute', bottom: 12, right: 12,
+            fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: '#5A626C',
+            padding: '3px 7px', borderRadius: 3,
+            background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.04)',
+          }}>
+            pré-visualização do slicer · viewer 3D indisponível
+          </div>
+        </div>
+      )}
+      {loadError && !thumbnailUrl && (
         <div style={{
           position: 'absolute', top: 12, right: 12, zIndex: 2, maxWidth: 360,
           padding: '8px 10px', borderRadius: 4,
@@ -346,7 +366,7 @@ export const ModelDetail = ({
       }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0a0b0e', position: 'relative' }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <ThreeViewer model={model} autoRotate={autoRotate} showGrid={showGrid} brightness={brightness} />
+            <ThreeViewer model={model} autoRotate={autoRotate} showGrid={showGrid} brightness={brightness} thumbnailUrl={model.thumbnailUrl} />
             <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6 }}>
               <FormatBadge format={model.format} />
               {model.polys > 0 && (

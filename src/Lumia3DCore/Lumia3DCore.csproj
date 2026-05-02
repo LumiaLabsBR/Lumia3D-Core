@@ -11,9 +11,9 @@
     <RootNamespace>Lumia3DCore</RootNamespace>
 
     <!-- Versão — atualizada pela tag git no CI (-p:Version=…) -->
-    <Version>0.1.7</Version>
-    <AssemblyVersion>0.1.7.0</AssemblyVersion>
-    <FileVersion>0.1.7.0</FileVersion>
+    <Version>0.1.8</Version>
+    <AssemblyVersion>0.1.8.0</AssemblyVersion>
+    <FileVersion>0.1.8.0</FileVersion>
 
     <!-- Metadados -->
     <Product>Lumia3D Core</Product>
