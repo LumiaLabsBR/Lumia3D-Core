@@ -61,6 +61,18 @@ jobs:
             -p:PublishSingleFile=true `
             -o publish/Lumia3DCore-win-x64
 
+      - name: Download WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          # Bootstrapper online (~150 KB) — quando rodado, baixa o runtime real.
+          # URL oficial estável: https://go.microsoft.com/fwlink/p/?LinkId=2124703
+          New-Item -ItemType Directory -Force installer\redist | Out-Null
+          $url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+          $out = "installer\redist\MicrosoftEdgeWebView2Setup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
+          $size = (Get-Item $out).Length
+          echo "WebView2 bootstrapper: $([Math]::Round($size/1KB, 1)) KB"
+
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |

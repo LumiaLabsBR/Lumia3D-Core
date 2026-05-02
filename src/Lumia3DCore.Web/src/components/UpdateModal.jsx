@@ -10,7 +10,7 @@ import { Icon } from './Icons.jsx';
  *   onDownload — invoca ipc.downloadUpdate(...) (pai cuida do progresso)
  *   onLater    — fecha o modal sem ação
  */
-export function UpdateModal({ info, downloadProgress, onDownload, onLater }) {
+export function UpdateModal({ info, downloadProgress, onDownload, onLater, onCancelDownload }) {
   if (!info) return null;
   const sizeMB = info.installerSize > 0 ? (info.installerSize / 1048576).toFixed(1) : '?';
   const downloading = downloadProgress != null;
@@ -77,27 +77,53 @@ export function UpdateModal({ info, downloadProgress, onDownload, onLater }) {
           padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.05)',
           display: 'flex', gap: 8,
         }}>
-          <button onClick={onLater} disabled={downloading} style={{
-            flex: 1, height: 36, borderRadius: 5,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            color: downloading ? '#3F4550' : '#9097A0',
-            fontSize: 12, cursor: downloading ? 'default' : 'pointer', fontFamily: 'inherit',
-          }}>
-            Mais tarde
-          </button>
-          <button onClick={onDownload} disabled={downloading} style={{
-            flex: 2, height: 36, borderRadius: 5,
-            background: downloading ? 'rgba(255, 122, 26, 0.2)' : 'linear-gradient(180deg, #FF8A2E 0%, #E66A0F 100%)',
-            border: '1px solid rgba(255, 138, 46, 0.3)',
-            color: downloading ? '#FFA85F' : '#1a0f05', fontWeight: 600,
-            fontSize: 12, cursor: downloading ? 'default' : 'pointer', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            boxShadow: downloading ? 'none' : '0 1px 0 rgba(255,255,255,0.15) inset',
-          }}>
-            <Icon name="download" size={13} strokeWidth={2.2} />
-            {downloading ? 'Baixando…' : 'Baixar e instalar'}
-          </button>
+          {downloading ? (
+            <>
+              <button onClick={onCancelDownload} style={{
+                flex: 1, height: 36, borderRadius: 5,
+                background: 'rgba(232, 17, 35, 0.12)',
+                border: '1px solid rgba(232, 17, 35, 0.30)',
+                color: '#FF8888', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                Cancelar
+              </button>
+              <button disabled style={{
+                flex: 2, height: 36, borderRadius: 5,
+                background: 'rgba(255, 122, 26, 0.2)',
+                border: '1px solid rgba(255, 138, 46, 0.3)',
+                color: '#FFA85F', fontWeight: 600,
+                fontSize: 12, cursor: 'default', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+                <Icon name="download" size={13} strokeWidth={2.2} />
+                Baixando…
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onLater} style={{
+                flex: 1, height: 36, borderRadius: 5,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                color: '#9097A0',
+                fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                Mais tarde
+              </button>
+              <button onClick={onDownload} style={{
+                flex: 2, height: 36, borderRadius: 5,
+                background: 'linear-gradient(180deg, #FF8A2E 0%, #E66A0F 100%)',
+                border: '1px solid rgba(255, 138, 46, 0.3)',
+                color: '#1a0f05', fontWeight: 600,
+                fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: '0 1px 0 rgba(255,255,255,0.15) inset',
+              }}>
+                <Icon name="download" size={13} strokeWidth={2.2} />
+                Baixar e instalar
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

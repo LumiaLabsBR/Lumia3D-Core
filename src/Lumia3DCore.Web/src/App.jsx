@@ -124,7 +124,7 @@ const WindowChrome = ({ onTweaks, stats, menus }) => {
   );
 };
 
-const Toast = ({ progress, stage }) => (
+const Toast = ({ progress, stage, onCancel }) => (
   <div style={{
     position: 'absolute', bottom: 30, right: 18, zIndex: 40,
     width: 320, background: '#1a1c20', border: '1px solid rgba(255,255,255,0.08)',
@@ -135,6 +135,17 @@ const Toast = ({ progress, stage }) => (
       <Icon name="upload" size={13} stroke="#FFA85F" strokeWidth={1.8} />
       <div style={{ flex: 1, fontSize: 12, color: '#E6E8EC' }}>Importando arquivos…</div>
       <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10.5, color: '#7A8290' }}>{Math.round(progress)}%</div>
+      {onCancel && progress < 100 && (
+        <button onClick={onCancel} title="Cancelar importação" style={{
+          width: 18, height: 18, padding: 0, marginLeft: 2,
+          border: 'none', background: 'transparent', color: '#7A8290', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 2,
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#E6E8EC'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#7A8290'; }}>
+          <Icon name="close" size={11} strokeWidth={2.2} />
+        </button>
+      )}
     </div>
     <div style={{ height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
       <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, #FF8A2E, #FFA85F)', transition: 'width 80ms linear' }} />
@@ -259,10 +270,27 @@ export default function App() {
     const off1 = ipc.on('thumbnailReady',  () => refreshModels());
     const off2 = ipc.on('importProgress',  ({ fileName }) => setImportStage(fileName || 'importando'));
     const off3 = ipc.on('importCounts',    () => setImporting((p) => p == null ? null : Math.min(99, p + 1)));
-    const off4 = ipc.on('importComplete',  () => {
+    const off4 = ipc.on('importComplete',  ({ objectsImported }) => {
       setImporting(100);
       refreshMeta(); refreshModels();
+      const n = objectsImported ?? 0;
+      const msg = n === 0 ? 'Nenhum modelo novo importado.'
+                : n === 1 ? '1 modelo importado com sucesso.'
+                : `${n} modelos importados com sucesso.`;
+      setUpdateMessage(msg);
+      setTimeout(() => setUpdateMessage(null), 3500);
       setTimeout(() => { setImporting(null); setImportStage(''); }, 600);
+    });
+    const offImpCancel = ipc.on('importCanceled', () => {
+      setImporting(null); setImportStage('');
+      setUpdateMessage('Importação cancelada.');
+      setTimeout(() => setUpdateMessage(null), 2500);
+      refreshMeta(); refreshModels();
+    });
+    const offImpError  = ipc.on('importError', ({ message }) => {
+      setImporting(null); setImportStage('');
+      setUpdateMessage(`Erro ao importar: ${message}`);
+      setTimeout(() => setUpdateMessage(null), 4000);
     });
 
     // Update flow
@@ -288,7 +316,10 @@ export default function App() {
     });
     const offB = ipc.on('downloadCanceled',    () => setDownloadProgress(null));
 
-    return () => { off1(); off2(); off3(); off4(); off5(); off6(); off7(); off8(); off9(); offA(); offB(); };
+    return () => {
+      off1(); off2(); off3(); off4(); offImpCancel(); offImpError();
+      off5(); off6(); off7(); off8(); off9(); offA(); offB();
+    };
   }, [refreshModels, refreshMeta]);
 
   const visibleModels = useMemo(() => {
@@ -489,7 +520,7 @@ export default function App() {
           }}
         />
       )}
-      {importing != null && <Toast progress={importing} stage={importStage} />}
+      {importing != null && <Toast progress={importing} stage={importStage} onCancel={() => ipc.cancelImport()} />}
       {tweaksOpen && (
         <TweaksPanel
           tweaks={tweaks}
@@ -512,6 +543,7 @@ export default function App() {
             setDownloadProgress(0);
             ipc.downloadUpdate(updateInfo.installerUrl, updateInfo.sha256Url, updateInfo.installerSize);
           }}
+          onCancelDownload={() => ipc.cancelDownload()}
         />
       )}
       {updateMessage && (

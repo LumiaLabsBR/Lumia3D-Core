@@ -37,6 +37,10 @@ publish/
 publish-*/
 **/wwwroot-build/
 
+# Inno Setup output e redist baixado em build-time
+installer-output/
+installer/redist/
+
 # ============================================================
 # JavaScript / Node / Vite
 # ============================================================

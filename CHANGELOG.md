@@ -6,6 +6,21 @@ Versionamento: [SemVer](https://semver.org/).
 
 ---
 
+## [v0.1.1] — 2026-05-02
+
+### Adicionado
+- **WebView2 bundled no instalador**: bootstrapper (~150 KB) baixado pelo CI antes do ISCC; instalado silenciosamente em runtime quando ausente. Resolve o problema do Windows 10 sem WebView2 que abria a app em tela em branco.
+- **Toast de sucesso no import**: ao terminar, mostra "N modelos importados com sucesso" / "Importação cancelada." / "Erro ao importar".
+- **Botão cancelar no Toast de import** — chama `ipc.cancelImport()`.
+- **Botão cancelar no UpdateModal** durante download — chama `ipc.cancelDownload()`.
+
+### Corrigido
+- `WebView2Installed` em Inno Setup agora também checa HKLM sem WOW6432Node (Windows ARM64).
+
+[v0.1.1]: https://github.com/LumiaLabsBR/Lumia3D-Core/releases/tag/v0.1.1
+
+---
+
 ## [v0.1.0] — 2026-05-01
 
 Primeira versão estável. Encerra o ciclo das alphas (0.1.0-alpha.1 a 0.1.0-alpha.9) com polish final, code-splitting, atalhos de teclado, tema light/contrast funcional e documentação completa.
