@@ -69,16 +69,24 @@ internal static class Program
         int? left  = double.IsNaN(settings.WindowX) ? null : (int?)settings.WindowX;
         int? top   = double.IsNaN(settings.WindowY) ? null : (int?)settings.WindowY;
 
-        bool sane = width >= MinW && height >= MinH
-                 && width  <= 16000 && height <= 16000
-                 && (!left.HasValue  || (left.Value  > -10000 && left.Value  < 16000))
-                 && (!top.HasValue   || (top.Value   > -10000 && top.Value   < 16000));
+        // Obtém dimensões reais da tela primária para validar a geometria salva.
+        // Isso evita o caso em que o usuário muda DPI ou resolução e as dimensões
+        // salvas (em pixels físicos) não fazem sentido para a tela atual.
+        var screen = System.Windows.Forms.Screen.PrimaryScreen?.WorkingArea
+                     ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
+        int maxW = Math.Max(screen.Width  + 64, DefaultW);
+        int maxH = Math.Max(screen.Height + 64, DefaultH);
 
-        AppLogger.Info($"Window settings load: w={width} h={height} x={left?.ToString() ?? "?"} y={top?.ToString() ?? "?"} sane={sane}");
+        bool sane = width >= MinW && height >= MinH
+                 && width  <= maxW && height <= maxH
+                 && (!left.HasValue || (left.Value > -64 && left.Value < screen.Width))
+                 && (!top.HasValue  || (top.Value  > -64 && top.Value  < screen.Height));
+
+        AppLogger.Info($"Window settings load: w={width} h={height} x={left?.ToString() ?? "?"} y={top?.ToString() ?? "?"} screen={screen.Width}x{screen.Height} sane={sane}");
 
         if (!sane)
         {
-            AppLogger.Warn("Window geometry corrupted — resetando para default centralizado");
+            AppLogger.Warn($"Window geometry fora dos limites da tela ({screen.Width}x{screen.Height}) — resetando para default centralizado");
             width  = DefaultW;
             height = DefaultH;
             left   = null;
@@ -121,7 +129,11 @@ internal static class Program
             var w = (PhotinoWindow)sender;
             var s = UserSettings.Load();
             int cw = w.Width, ch = w.Height, cx = w.Left, cy = w.Top;
-            if (cw >= MinW && ch >= MinH && cx > -10000 && cy > -10000)
+            // Reutiliza maxW/maxH da tela calculados na abertura (capturados via closure)
+            bool validClose = cw >= MinW && ch >= MinH
+                           && cw <= maxW && ch <= maxH
+                           && cx > -64 && cy > -64;
+            if (validClose)
             {
                 s.WindowWidth  = cw;
                 s.WindowHeight = ch;

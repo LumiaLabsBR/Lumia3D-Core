@@ -150,8 +150,15 @@ async function parse3MFCustom(buffer, material) {
   const parseError = doc.querySelector('parsererror');
   if (parseError) throw new Error('XML inválido no 3MF: ' + parseError.textContent.slice(0, 100));
 
-  // getElementsByTagName ignora namespaces (mais permissivo que querySelector)
-  const meshes = doc.getElementsByTagName('mesh');
+  // getElementsByTagNameNS('*', ...) é necessário porque 3MFs usam namespace padrão
+  // xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02", e em modo
+  // application/xml o getElementsByTagName puro não encontra elementos nesse namespace.
+  const getByTag = (node, tag) => {
+    const r = node.getElementsByTagNameNS('*', tag);
+    return r.length > 0 ? r : node.getElementsByTagName(tag);
+  };
+
+  const meshes = getByTag(doc, 'mesh');
   if (meshes.length === 0) throw new Error('Nenhum <mesh> encontrado no 3MF');
 
   console.log('[Lumia3D] parse3MFCustom: meshes=', meshes.length);
@@ -159,8 +166,8 @@ async function parse3MFCustom(buffer, material) {
   let totalVerts = 0, totalTris = 0;
 
   for (const mesh of meshes) {
-    const verticesEls = mesh.getElementsByTagName('vertex');
-    const trianglesEls = mesh.getElementsByTagName('triangle');
+    const verticesEls = getByTag(mesh, 'vertex');
+    const trianglesEls = getByTag(mesh, 'triangle');
     if (verticesEls.length === 0 || trianglesEls.length === 0) continue;
 
     const positions = new Float32Array(verticesEls.length * 3);
