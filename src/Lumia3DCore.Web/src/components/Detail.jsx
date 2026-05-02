@@ -10,6 +10,7 @@ const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
   const ref = useRef(null);
   const stateRef = useRef({});
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   // Sincroniza opções com a cena viva via ref (evita re-criar a scene a cada toggle)
   const optsRef = useRef({ autoRotate, showGrid, brightness });
@@ -63,14 +64,23 @@ const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
     let cancelled = false;
     if (model.url) {
       setLoading(true);
+      setLoadError(null);
       loadModel({ url: model.url, format: model.format }, matClay)
         .then((loaded) => {
-          if (cancelled || !loaded) return;
+          if (cancelled) return;
+          if (!loaded) {
+            setLoadError(`Formato .${model.format} sem loader`);
+            return;
+          }
           scene.remove(obj);
           obj = loaded;
           scene.add(obj);
         })
-        .catch((err) => console.warn('[Lumia3D] failed to load', model.url, err))
+        .catch((err) => {
+          if (cancelled) return;
+          console.error('[Lumia3D] failed to load', model.url, err);
+          setLoadError(err?.message || String(err) || 'erro desconhecido');
+        })
         .finally(() => { if (!cancelled) setLoading(false); });
     }
 
@@ -147,6 +157,23 @@ const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
           border: '1px solid rgba(255, 122, 26, 0.3)',
         }}>
           carregando malha…
+        </div>
+      )}
+      {loadError && (
+        <div style={{
+          position: 'absolute', top: 12, right: 12, zIndex: 2, maxWidth: 360,
+          padding: '8px 10px', borderRadius: 4,
+          background: 'rgba(232, 17, 35, 0.20)', color: '#FF8888',
+          fontFamily: '"JetBrains Mono", monospace', fontSize: 10,
+          border: '1px solid rgba(232, 17, 35, 0.40)', lineHeight: 1.5,
+        }}>
+          <div style={{ fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 3 }}>
+            falha ao carregar malha
+          </div>
+          <div style={{ wordBreak: 'break-word' }}>{loadError}</div>
+          <div style={{ marginTop: 4, color: '#FF6666', fontSize: 9 }}>
+            mostrando placeholder · F12 pra detalhes
+          </div>
         </div>
       )}
     </div>

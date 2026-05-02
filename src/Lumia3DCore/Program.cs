@@ -91,8 +91,10 @@ internal static class Program
             .SetHeight(height)
             .SetMinWidth(MinW)
             .SetMinHeight(MinH)
-            .SetDevToolsEnabled(IsDebug())
-            .SetContextMenuEnabled(IsDebug())
+            // DevTools sempre habilitado em alpha/beta pra facilitar bug report.
+            // Usuario pressiona F12 ou Ctrl+Shift+I pra abrir.
+            .SetDevToolsEnabled(true)
+            .SetContextMenuEnabled(true)
             .SetIconFile(File.Exists(iconPath) ? iconPath : string.Empty)
             .RegisterWebMessageReceivedHandler((object? sender, string message) =>
             {

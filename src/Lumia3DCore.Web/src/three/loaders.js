@@ -126,15 +126,24 @@ export async function loadGLB(urlOrPath) {
 // ── 3MF ─────────────────────────────────────────────────────────────────
 // 3MF é um ZIP com modelos XML. ThreeMFLoader aceita ArrayBuffer via parse().
 function parse3MF(buffer, material) {
+  console.log('[Lumia3D] parse3MF: buffer size=', buffer.byteLength);
   const obj = tmfLoader.parse(buffer);
+  if (!obj) throw new Error('ThreeMFLoader.parse retornou null');
+  // O 3MFLoader retorna Group; aplicar material substitui qualquer textura embutida
+  // pelo nosso material clay padrão, o que é OK pra visualização técnica.
   applyMaterial(obj, material);
+  console.log('[Lumia3D] parse3MF: success, children=', obj.children?.length);
   return fit(obj);
 }
 
 export async function load3MF(urlOrPath, material) {
+  console.log('[Lumia3D] load3MF', urlOrPath, 'IS_PHOTINO=', IS_PHOTINO);
   if (IS_PHOTINO) {
-    const b64 = await ipc.readFileAsBase64(stripFileScheme(urlOrPath));
+    const path = stripFileScheme(urlOrPath);
+    console.log('[Lumia3D] readFileAsBase64', path);
+    const b64 = await ipc.readFileAsBase64(path);
     if (!b64) throw new Error('readFileAsBase64 returned null');
+    console.log('[Lumia3D] base64 length=', b64.length);
     return parse3MF(base64ToArrayBuffer(b64), material);
   }
   return new Promise((resolve, reject) => {
