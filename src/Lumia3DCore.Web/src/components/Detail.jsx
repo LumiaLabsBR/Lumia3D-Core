@@ -5,10 +5,14 @@ import { SectionLabel } from './Sidebar.jsx';
 import { buildProcedural, matClay } from '../three/procedural.js';
 import { loadModel } from '../three/loaders.js';
 
-const ThreeViewer = ({ model }) => {
+const ThreeViewer = ({ model, autoRotate, showGrid, brightness }) => {
   const ref = useRef(null);
   const stateRef = useRef({});
   const [loading, setLoading] = useState(false);
+
+  // Sincroniza opções com a cena viva via ref (evita re-criar a scene a cada toggle)
+  const optsRef = useRef({ autoRotate, showGrid, brightness });
+  useEffect(() => { optsRef.current = { autoRotate, showGrid, brightness }; }, [autoRotate, showGrid, brightness]);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -50,6 +54,7 @@ const ThreeViewer = ({ model }) => {
     const grid = new THREE.GridHelper(10, 20, 0x2a2e34, 0x1a1c20);
     grid.position.y = -1;
     scene.add(grid);
+    grid.visible = optsRef.current.showGrid !== false;
 
     let obj = buildProcedural(model.shape);
     scene.add(obj);
@@ -69,11 +74,9 @@ const ThreeViewer = ({ model }) => {
     }
 
     let raf;
-    let auto = true;
     const start = performance.now();
 
     const onPointerDown = (e) => {
-      auto = false;
       stateRef.current.dragging = true;
       stateRef.current.lastX = e.clientX;
       stateRef.current.lastY = e.clientY;
@@ -99,7 +102,12 @@ const ThreeViewer = ({ model }) => {
 
     const animate = () => {
       raf = requestAnimationFrame(animate);
-      if (auto && obj) obj.rotation.y = (performance.now() - start) * 0.0005;
+      const opts = optsRef.current;
+      if (opts.autoRotate && !stateRef.current.dragging && obj) {
+        obj.rotation.y = (performance.now() - start) * 0.0005;
+      }
+      grid.visible = opts.showGrid !== false;
+      key.intensity = 0.6 + (opts.brightness ?? 0.5) * 1.4;
       renderer.render(scene, camera);
     };
     animate();
@@ -143,6 +151,19 @@ const ThreeViewer = ({ model }) => {
     </div>
   );
 };
+
+const ViewerToggle = ({ icon, active, onClick, title }) => (
+  <button onClick={onClick} title={title} style={{
+    width: 28, height: 28, borderRadius: 4,
+    background: active ? 'rgba(255, 122, 26, 0.18)' : 'rgba(0,0,0,0.5)',
+    border: active ? '1px solid rgba(255, 122, 26, 0.4)' : '1px solid rgba(255,255,255,0.06)',
+    color: active ? '#FFA85F' : '#C7CDD5',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', backdropFilter: 'blur(6px)',
+  }}>
+    <Icon name={icon} size={13} strokeWidth={1.7} />
+  </button>
+);
 
 const KV = ({ k, v, mono }) => (
   <>
@@ -273,6 +294,11 @@ export const ModelDetail = ({
     return () => window.removeEventListener('click', onClick);
   }, [pickerOpen]);
 
+  // ── Viewer controls (locais) ──
+  const [autoRotate, setAutoRotate] = useState(true);
+  const [showGrid, setShowGrid]     = useState(true);
+  const [brightness, setBrightness] = useState(0.5);
+
   // ── Confirm delete ──
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -292,7 +318,7 @@ export const ModelDetail = ({
       }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0a0b0e', position: 'relative' }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <ThreeViewer model={model} />
+            <ThreeViewer model={model} autoRotate={autoRotate} showGrid={showGrid} brightness={brightness} />
             <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6 }}>
               <FormatBadge format={model.format} />
               {model.polys > 0 && (
@@ -300,6 +326,11 @@ export const ModelDetail = ({
                   {(model.polys / 1000).toFixed(0)}k tris
                 </span>
               )}
+            </div>
+            <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', gap: 6 }}>
+              <ViewerToggle icon="rotate"  active={autoRotate} onClick={() => setAutoRotate(v => !v)} title="Rotação automática" />
+              <ViewerToggle icon="grid"    active={showGrid}   onClick={() => setShowGrid(v => !v)}   title="Mostrar grade" />
+              <ViewerToggle icon="sun"     active={brightness > 0.5} onClick={() => setBrightness(b => b > 0.5 ? 0.3 : 0.8)} title="Iluminação" />
             </div>
             <div style={{
               position: 'absolute', bottom: 12, right: 12,

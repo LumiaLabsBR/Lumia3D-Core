@@ -1,18 +1,21 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { api as ipc } from './api/client.js';
 import { api as library } from './api/library.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Header } from './components/Header.jsx';
 import { Library } from './components/Library.jsx';
-import { ModelDetail } from './components/Detail.jsx';
-import { TweaksPanel } from './components/TweaksPanel.jsx';
 import { StatusBar } from './components/StatusBar.jsx';
-import { AboutModal } from './components/AboutModal.jsx';
 import { LoadingSplash } from './components/LoadingSplash.jsx';
-import { UpdateModal } from './components/UpdateModal.jsx';
 import { Icon } from './components/Icons.jsx';
 import { useLocalStorage } from './hooks/useLocalStorage.js';
 import { useCollections } from './hooks/useCollections.js';
+
+// Code-splitting: modais e componentes pesados (three.js, etc.) vão pra chunks
+// separados, carregados sob demanda. Reduz o bundle inicial.
+const ModelDetail  = lazy(() => import('./components/Detail.jsx').then(m => ({ default: m.ModelDetail })));
+const TweaksPanel  = lazy(() => import('./components/TweaksPanel.jsx').then(m => ({ default: m.TweaksPanel })));
+const AboutModal   = lazy(() => import('./components/AboutModal.jsx').then(m => ({ default: m.AboutModal })));
+const UpdateModal  = lazy(() => import('./components/UpdateModal.jsx').then(m => ({ default: m.UpdateModal })));
 
 const DEFAULT_TWEAKS  = { theme: 'dark', density: 'comfortable', defaultView: 'gallery' };
 const DEFAULT_FILTERS = { selectedCat: null, activeTags: [], query: '', sort: 'date' };
@@ -186,6 +189,41 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => { document.body.className = `theme-${tweaks.theme}`; }, [tweaks.theme]);
+
+  // Atalhos de teclado globais
+  useEffect(() => {
+    const isInput = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    const onKey = (e) => {
+      // Ctrl/Cmd + O → importar arquivos
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        onPickFiles();
+        return;
+      }
+      // Ctrl/Cmd + Shift + O → importar pasta
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        onPickFolder();
+        return;
+      }
+      // / → focar busca
+      if (e.key === '/' && !isInput(document.activeElement)) {
+        e.preventDefault();
+        document.querySelector('input[placeholder*="Buscar"]')?.focus();
+        return;
+      }
+      // Esc → fecha modais (já tratado por backdrop click; aqui só fecha o detail/about/update)
+      if (e.key === 'Escape') {
+        if (active) setActive(null);
+        else if (aboutOpen) setAboutOpen(false);
+        else if (tweaksOpen) setTweaksOpen(false);
+        else if (updateInfo && downloadProgress == null) setUpdateInfo(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, aboutOpen, tweaksOpen, updateInfo, downloadProgress]);
 
   // App info do backend C# via IPC
   useEffect(() => {
@@ -406,6 +444,8 @@ export default function App() {
           <Library
             models={visibleModels} view={view} onOpen={setActive}
             isFavorite={isFavorite} toggleFavorite={toggleFavorite}
+            onImport={onPickFiles}
+            isFiltered={!!(filters.selectedCat || filters.activeTags.length || filters.query || selectedCollection)}
           />
         </main>
       </div>
@@ -414,6 +454,7 @@ export default function App() {
         appInfo={appInfo}
         onAbout={() => setAboutOpen(true)}
       />
+      <Suspense fallback={null}>
       {active && (
         <ModelDetail
           model={active} onClose={() => setActive(null)}
@@ -459,6 +500,8 @@ export default function App() {
           onSettingsChange={updateSettings}
         />
       )}
+      </Suspense>
+      <Suspense fallback={null}>
       {aboutOpen && <AboutModal appInfo={appInfo} onClose={() => setAboutOpen(false)} />}
       {updateInfo && (
         <UpdateModal
@@ -482,6 +525,7 @@ export default function App() {
           {updateMessage}
         </div>
       )}
+      </Suspense>
       <LoadingSplash visible={loading} />
     </div>
   );

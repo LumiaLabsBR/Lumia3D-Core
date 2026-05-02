@@ -197,14 +197,50 @@ const VirtualList = ({ models, onOpen, isFavorite, toggleFavorite }) => {
   );
 };
 
-export const Library = ({ models, view, onOpen, isFavorite, toggleFavorite }) => {
+export const Library = ({ models, view, onOpen, isFavorite, toggleFavorite, onImport, isFiltered }) => {
   if (models.length === 0) {
+    if (isFiltered) {
+      return (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5A626C' }}>
+          <div style={{ textAlign: 'center' }}>
+            <Icon name="search" size={28} stroke="#3F4550" strokeWidth={1.4} />
+            <div style={{ marginTop: 10, fontSize: 13 }}>Nenhum modelo encontrado.</div>
+            <div style={{ marginTop: 4, fontSize: 11, color: '#3F4550' }}>Tente outros termos ou limpe os filtros.</div>
+          </div>
+        </div>
+      );
+    }
+    // Biblioteca vazia (sem filtros): CTA pra importar
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5A626C' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Icon name="search" size={28} stroke="#3F4550" strokeWidth={1.4} />
-          <div style={{ marginTop: 10, fontSize: 13 }}>Nenhum modelo encontrado.</div>
-          <div style={{ marginTop: 4, fontSize: 11, color: '#3F4550' }}>Tente outros termos ou limpe os filtros.</div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{
+          textAlign: 'center', padding: 40, borderRadius: 8,
+          border: '2px dashed rgba(255, 122, 26, 0.2)', maxWidth: 440,
+        }}>
+          <Icon name="upload" size={40} stroke="#FF7A1A" strokeWidth={1.2} />
+          <div style={{ marginTop: 16, fontSize: 16, fontWeight: 600, color: '#E6E8EC' }}>
+            Sua biblioteca está vazia
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12.5, color: '#9097A0', lineHeight: 1.55 }}>
+            Arraste arquivos <span style={{ fontFamily: '"JetBrains Mono", monospace', color: '#FFA85F' }}>.stl</span>,{' '}
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', color: '#FFA85F' }}>.obj</span> ou{' '}
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', color: '#FFA85F' }}>.3mf</span> aqui,
+            <br />ou clique no botão abaixo.
+          </div>
+          {onImport && (
+            <button onClick={onImport} style={{
+              marginTop: 20, padding: '10px 20px',
+              background: 'linear-gradient(180deg, #FF8A2E 0%, #E66A0F 100%)',
+              color: '#1a0f05', border: '1px solid rgba(255, 138, 46, 0.3)',
+              borderRadius: 5, fontWeight: 600, fontSize: 12, cursor: 'pointer',
+              fontFamily: 'inherit',
+              boxShadow: '0 1px 0 rgba(255,255,255,0.15) inset, 0 4px 12px rgba(255, 122, 26, 0.2)',
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+            }}>
+              <Icon name="upload" size={13} strokeWidth={2.2} />
+              Importar modelos
+            </button>
+          )}
         </div>
       </div>
     );
