@@ -58,13 +58,32 @@ internal static class Program
 
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
 
-        // Sanitiza tamanho: se UserSettings tiver valor degenerado (minimização
-        // anterior, DPI bug, etc.), volta pro default. Mínimo absoluto: 800x500.
-        const int MinW = 800, MinH = 500;
+        // Sanitiza geometria da janela: settings.json corrompido (DPI, minimização,
+        // off-screen) pode salvar valores degenerados. Reseta TUDO se qualquer
+        // dimensão suspeita aparece.
+        const int MinW = 900, MinH = 600;
+        const int DefaultW = 1280, DefaultH = 800;
+
         int width  = (int)settings.WindowWidth;
         int height = (int)settings.WindowHeight;
-        if (width  < MinW) width  = 1280;
-        if (height < MinH) height = 800;
+        int? left  = double.IsNaN(settings.WindowX) ? null : (int?)settings.WindowX;
+        int? top   = double.IsNaN(settings.WindowY) ? null : (int?)settings.WindowY;
+
+        bool sane = width >= MinW && height >= MinH
+                 && width  <= 16000 && height <= 16000
+                 && (!left.HasValue  || (left.Value  > -10000 && left.Value  < 16000))
+                 && (!top.HasValue   || (top.Value   > -10000 && top.Value   < 16000));
+
+        AppLogger.Info($"Window settings load: w={width} h={height} x={left?.ToString() ?? "?"} y={top?.ToString() ?? "?"} sane={sane}");
+
+        if (!sane)
+        {
+            AppLogger.Warn("Window geometry corrupted — resetando para default centralizado");
+            width  = DefaultW;
+            height = DefaultH;
+            left   = null;
+            top    = null;
+        }
 
         var window = new PhotinoWindow()
             .SetTitle(AppName)
@@ -81,30 +100,38 @@ internal static class Program
                 ((PhotinoWindow)sender!).SendWebMessage(responseJson);
             });
 
-        if (!double.IsNaN(settings.WindowX) && !double.IsNaN(settings.WindowY))
+        if (left.HasValue && top.HasValue && sane)
         {
-            window.SetLeft((int)settings.WindowX)
-                  .SetTop((int)settings.WindowY);
+            window.SetLeft(left.Value).SetTop(top.Value);
+        }
+        else
+        {
+            // Sem posição válida → centraliza
+            window.Center();
         }
 
-        if (settings.IsMaximized)
+        if (settings.IsMaximized && sane)
             window.SetMaximized(true);
 
-        // Salvar posição ao fechar — só se as dimensões forem sãs
-        // (evita persistir tamanho minimizado/zero acidental).
+        // Salvar geometria ao fechar — APENAS se sã (evita persistir ruído)
         window.RegisterWindowClosingHandler((object sender, EventArgs args) =>
         {
             var w = (PhotinoWindow)sender;
             var s = UserSettings.Load();
-            if (w.Width >= MinW && w.Height >= MinH)
+            int cw = w.Width, ch = w.Height, cx = w.Left, cy = w.Top;
+            if (cw >= MinW && ch >= MinH && cx > -10000 && cy > -10000)
             {
-                s.WindowWidth  = w.Width;
-                s.WindowHeight = w.Height;
-                s.WindowX      = w.Left;
-                s.WindowY      = w.Top;
+                s.WindowWidth  = cw;
+                s.WindowHeight = ch;
+                s.WindowX      = cx;
+                s.WindowY      = cy;
                 s.Save();
             }
-            return false; // false = permitir fechar
+            else
+            {
+                AppLogger.Warn($"Window close: geometria invalida ({cw}x{ch}+{cx},{cy}) — nao salvando");
+            }
+            return false;
         });
 
         // Conecta push C# → frontend e notificações de thumbnail
@@ -122,6 +149,19 @@ internal static class Program
                     case "minimize": window.SetMinimized(true); break;
                     case "maximize": window.SetMaximized(!window.Maximized); break;
                     case "close":    window.Close(); break;
+                    case "resetSize":
+                        // Restaura tamanho/posição padrão e limpa do settings.json
+                        window.SetWidth(DefaultW).SetHeight(DefaultH);
+                        window.Center();
+                        var s = UserSettings.Load();
+                        s.WindowWidth  = DefaultW;
+                        s.WindowHeight = DefaultH;
+                        s.WindowX      = double.NaN;
+                        s.WindowY      = double.NaN;
+                        s.IsMaximized  = false;
+                        s.Save();
+                        AppLogger.Info("Window: resetSize aplicado");
+                        break;
                 }
             }
             catch (Exception ex) { AppLogger.Warn($"WindowAction '{action}' falhou: {ex.Message}"); }

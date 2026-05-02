@@ -95,6 +95,7 @@ public class IpcBridge
                 "windowMinimize"      => HandleWindowAction("minimize"),
                 "windowMaximize"      => HandleWindowAction("maximize"),
                 "windowClose"         => HandleWindowAction("close"),
+                "windowResetSize"     => HandleWindowAction("resetSize"),
 
                 "openExternal"        => HandleOpenExternal(request),
                 "pickFiles"           => HandlePickFiles(),

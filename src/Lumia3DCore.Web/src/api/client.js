@@ -162,6 +162,7 @@ export const api = {
   windowMinimize:  () => send('windowMinimize'),
   windowMaximize:  () => send('windowMaximize'),
   windowClose:     () => send('windowClose'),
+  windowResetSize: () => send('windowResetSize'),
   openExternal:    (url) => send('openExternal', { url }),
 
   // Native pickers (WebView2 esconde File.path; precisa de dialog Win32)

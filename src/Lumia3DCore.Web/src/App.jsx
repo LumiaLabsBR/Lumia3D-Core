@@ -419,6 +419,7 @@ export default function App() {
       { label: 'Galeria', onClick: () => setView('gallery') },
       { label: 'Lista',   onClick: () => setView('list') },
       { divider: true },
+      { label: 'Restaurar tamanho da janela', onClick: () => ipc.windowResetSize() },
       { label: 'Tweaks…', onClick: () => setTweaksOpen(true) },
     ],
     'Biblioteca': [
