@@ -5,14 +5,16 @@
 // Em dev (browser), URLs http(s) funcionam normal via loader.load(url).
 
 import * as THREE from 'three';
-import { STLLoader }  from 'three/examples/jsm/loaders/STLLoader.js';
-import { OBJLoader }  from 'three/examples/jsm/loaders/OBJLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { STLLoader }   from 'three/examples/jsm/loaders/STLLoader.js';
+import { OBJLoader }   from 'three/examples/jsm/loaders/OBJLoader.js';
+import { GLTFLoader }  from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { api as ipc } from '../api/client.js';
 
 const stlLoader  = new STLLoader();
 const objLoader  = new OBJLoader();
 const gltfLoader = new GLTFLoader();
+const tmfLoader  = new ThreeMFLoader();
 
 const IS_PHOTINO = typeof window !== 'undefined' && typeof window.external?.sendMessage === 'function';
 
@@ -121,6 +123,25 @@ export async function loadGLB(urlOrPath) {
   });
 }
 
+// ── 3MF ─────────────────────────────────────────────────────────────────
+// 3MF é um ZIP com modelos XML. ThreeMFLoader aceita ArrayBuffer via parse().
+function parse3MF(buffer, material) {
+  const obj = tmfLoader.parse(buffer);
+  applyMaterial(obj, material);
+  return fit(obj);
+}
+
+export async function load3MF(urlOrPath, material) {
+  if (IS_PHOTINO) {
+    const b64 = await ipc.readFileAsBase64(stripFileScheme(urlOrPath));
+    if (!b64) throw new Error('readFileAsBase64 returned null');
+    return parse3MF(base64ToArrayBuffer(b64), material);
+  }
+  return new Promise((resolve, reject) => {
+    tmfLoader.load(urlOrPath, (obj) => { applyMaterial(obj, material); resolve(fit(obj)); }, undefined, reject);
+  });
+}
+
 // Universal entry — escolhe loader por extensão. Retorna null sem URL
 // (caller usa procedural fallback).
 export function loadModel({ url, format }, material) {
@@ -128,7 +149,7 @@ export function loadModel({ url, format }, material) {
   const ext = (format || url.split('.').pop()).toLowerCase().replace('.', '');
   if (ext === 'stl') return loadSTL(url, material);
   if (ext === 'obj') return loadOBJ(url, material);
+  if (ext === '3mf') return load3MF(url, material);
   if (ext === 'glb' || ext === 'gltf') return loadGLB(url);
-  // 3MF: parser não-trivial (XML em ZIP); cai pro procedural por agora.
   return Promise.resolve(null);
 }

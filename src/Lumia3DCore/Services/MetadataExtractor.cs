@@ -173,11 +173,12 @@ public static class MetadataExtractor
     private static Metadata Extract3mf(string filePath)
     {
         using var zip = ZipFile.OpenRead(filePath);
+        // O 3dmodel.model pode estar em /3D/3dmodel.model OU em outros paths;
+        // procura QUALQUER .model dentro do ZIP.
         var entry = zip.Entries.FirstOrDefault(e =>
-            e.FullName.EndsWith("3dmodel.model", StringComparison.OrdinalIgnoreCase));
+            e.FullName.EndsWith(".model", StringComparison.OrdinalIgnoreCase));
         if (entry == null) return Empty;
 
-        // Cap defensivo (zip bomb / arquivo corrompido)
         const long maxXmlBytes = 100 * 1024 * 1024;
         if (entry.Length > maxXmlBytes) return Empty;
 
@@ -185,19 +186,29 @@ public static class MetadataExtractor
         using var reader = new StreamReader(stream, Encoding.UTF8);
         string xml = reader.ReadToEnd();
 
-        // Parser ingênuo via substring — evita custo de XmlReader pra metadata simples.
-        // Conta <triangle ...> tags.
-        int triangles = CountSubstring(xml, "<triangle ");
+        // Conta <triangle ...> tags. Especificação 3MF garante o atributo
+        // v1=, então buscar "<triangle" + lookup é suficiente.
+        // Tenta com espaço, novalinha, e tab (XML pode ter qualquer whitespace)
+        int triangles = CountTagOccurrences(xml, "triangle");
 
-        // Bbox: extrair vertices via regex simples
+        // Bbox: extrair vertices. Aceita qualquer whitespace após <vertex.
         double minX = double.PositiveInfinity, minY = double.PositiveInfinity, minZ = double.PositiveInfinity;
         double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity, maxZ = double.NegativeInfinity;
         int idx = 0;
-        while ((idx = xml.IndexOf("<vertex ", idx, StringComparison.Ordinal)) >= 0)
+        while (idx < xml.Length)
         {
-            int end = xml.IndexOf("/>", idx, StringComparison.Ordinal);
+            int found = xml.IndexOf("<vertex", idx, StringComparison.Ordinal);
+            if (found < 0) break;
+            // Garante que é <vertex seguido de whitespace ou >, não <vertexX...
+            char next = found + 7 < xml.Length ? xml[found + 7] : '\0';
+            if (next != ' ' && next != '\t' && next != '\n' && next != '\r' && next != '>')
+            {
+                idx = found + 7;
+                continue;
+            }
+            int end = xml.IndexOf('>', found);
             if (end < 0) break;
-            string tag = xml.Substring(idx, end - idx);
+            string tag = xml.Substring(found, end - found);
             double? x = ExtractAttr(tag, "x"), y = ExtractAttr(tag, "y"), z = ExtractAttr(tag, "z");
             if (x.HasValue && y.HasValue && z.HasValue)
             {
@@ -205,12 +216,31 @@ public static class MetadataExtractor
                 if (y < minY) minY = y.Value; if (y > maxY) maxY = y.Value;
                 if (z < minZ) minZ = z.Value; if (z > maxZ) maxZ = z.Value;
             }
-            idx = end + 2;
+            idx = end + 1;
         }
 
         return triangles == 0 || double.IsInfinity(minX)
             ? new Metadata(triangles, 0, 0, 0)
             : new Metadata(triangles, maxX - minX, maxY - minY, maxZ - minZ);
+    }
+
+    /// <summary>Conta ocorrências de "&lt;tagName" seguido de whitespace, "/", ou "&gt;".</summary>
+    private static int CountTagOccurrences(string xml, string tagName)
+    {
+        int count = 0, idx = 0;
+        string needle = "<" + tagName;
+        while ((idx = xml.IndexOf(needle, idx, StringComparison.Ordinal)) >= 0)
+        {
+            int after = idx + needle.Length;
+            if (after < xml.Length)
+            {
+                char c = xml[after];
+                if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '>' || c == '/')
+                    count++;
+            }
+            idx = after;
+        }
+        return count;
     }
 
     private static int CountSubstring(string text, string substring)
